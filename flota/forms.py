@@ -579,3 +579,15 @@ class EntregaSuministrosForm(forms.ModelForm):
         self.fields['unidad'].required = False
         self.fields['para_motor'].required = False
         self.fields['para_thermo'].required = False
+        
+class OperadorSelectionForm(forms.Form):
+    """
+    Formulario simple para que el Encargado seleccione al operador
+    antes de decidir el tipo de proceso.
+    """
+    operador = forms.ModelChoiceField(
+        queryset=Operador.objects.all().order_by('nombre', 'apellido'),
+        label="Seleccionar Operador para el Proceso",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        required=True
+    )

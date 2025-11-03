@@ -1,4 +1,4 @@
-# models.py (Completo)
+# models.py (Completo y Modificado)
 
 from django.db import models
 from django.contrib.auth.models import User, Group
@@ -43,12 +43,22 @@ class TareaMantenimiento(models.Model):
         ('PREVENTIVO', 'Mantenimiento Preventivo'),
         ('CORRECTIVO', 'Mantenimiento Correctivo'),
     ]
+    
+    # --- STATUS_CHOICES MODIFICADOS ---
+    ESTADO_ASIGNADA = 'ASIGNADA'
+    ESTADO_EN_PROCESO = 'EN_PROCESO'
+    ESTADO_PENDIENTE_CIERRE = 'PENDIENTE_CIERRE' # <-- Modificado
+    ESTADO_CERRADA = 'CERRADA'                 # <-- Nuevo
+    ESTADO_CANCELADA = 'CANCELADA'
+    
     STATUS_CHOICES = [
-        ('ASIGNADA', 'Asignada'),
-        ('EN_PROCESO', 'En Proceso'),
-        ('COMPLETADA', 'Completada'),
-        ('CANCELADA', 'Cancelada'),
+        (ESTADO_ASIGNADA, 'Asignada'),
+        (ESTADO_EN_PROCESO, 'En Proceso'),
+        (ESTADO_PENDIENTE_CIERRE, 'Pendiente de Cierre'), # <-- Modificado
+        (ESTADO_CERRADA, 'Cerrada'),                 # <-- Nuevo
+        (ESTADO_CANCELADA, 'Cancelada'),
     ]
+    # --- FIN DE MODIFICACIÓN ---
     
     PRIORIDAD_CHOICES = [
         ('BAJA', 'Baja'),
@@ -106,7 +116,7 @@ class TareaMantenimiento(models.Model):
     status = models.CharField(
         max_length=20, 
         choices=STATUS_CHOICES, 
-        default='ASIGNADA',
+        default=ESTADO_ASIGNADA, # <-- Modificado
         verbose_name="Estado"
     )
     fecha_asignacion = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Asignación")
@@ -156,10 +166,24 @@ def ruta_evidencia_subtask(instance, filename):
     Ej: media/mantenimiento/tarea_10/subtask_5_foto.jpg
     """
     tarea_id = instance.tarea_principal.id
-    subtask_id = instance.id
-    # Obtenemos la extensión del archivo
-    extension = os.path.splitext(filename)[1]
-    return f'mantenimiento/tarea_{tarea_id}/subtask_{subtask_id}{extension}'
+    # Corregido: El ID de la subtarea puede no existir en la creación
+    # Usaremos un hash o un nombre único si es necesario, pero para este flujo,
+    # el nombre del archivo original suele ser suficiente para la función `upload_to`.
+    # Sin embargo, la lógica en views.py la construye manualmente.
+    # Esta función es llamada por `formset.save(commit=False)` y luego usada en la vista.
+    # El ID puede ser None si es un objeto nuevo.
+    # La vista `guardar_progreso_preventivo` parece construir la ruta manualmente,
+    # pero usa esta función. Asegurémonos de que maneje `instance.id` como None.
+    
+    # Si la instancia ya tiene ID (ya fue guardada al menos una vez):
+    if instance.id:
+        subtask_id = instance.id
+        filename = f"subtask_{subtask_id}{os.path.splitext(filename)[1]}"
+    else:
+        # Si es nueva, usamos el nombre original
+        pass
+        
+    return f'mantenimiento/tarea_{tarea_id}/{filename}'
 
 
 class TareaPreventivaSubtask(models.Model):
@@ -209,12 +233,15 @@ class TareaPreventivaSubtask(models.Model):
         blank=True, 
         verbose_name="Observaciones (ej: mm, psi, notas)"
     )
+    
+    # Esta ruta es la *default*, pero la vista `guardar_progreso_preventivo`
+    # la sobreescribe con la lógica S3 manual.
     foto_evidencia = models.ImageField(
-    upload_to='evidencias/', 
-    null=True,   # <-- ¡Añadir este! Permite guardar NULL en la base de datos.
-    blank=True,  # <-- ¡Añadir este! Permite que el campo esté vacío en el formulario.
-    verbose_name="Foto de Evidencia"
-)
+        upload_to='evidencias/', # <-- Ruta genérica
+        null=True,   
+        blank=True,  
+        verbose_name="Foto de Evidencia"
+    )
 
 
     class Meta:

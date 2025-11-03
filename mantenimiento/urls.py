@@ -1,4 +1,4 @@
-# urls.py (Completo)
+# urls.py (Completo y Corregido)
 
 from django.urls import path
 from . import views
@@ -10,6 +10,7 @@ urlpatterns = [
     path('admin/dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
     path('admin/asignar/', views.AsignarTareaView.as_view(), name='asignar_tarea'),
     path('admin/tarea/<int:pk>/', views.AdminTareaDetalleView.as_view(), name='admin_tarea_detalle'),
+    path('admin/tarea/<int:pk>/eliminar/', views.TareaMantenimientoDeleteView.as_view(), name='admin_tarea_eliminar'),
 
     # --- URLs de Técnico ---
     path('tecnico/dashboard/', views.TecnicoDashboardView.as_view(), name='tecnico_dashboard'),
@@ -21,7 +22,7 @@ urlpatterns = [
     path('tecnico/tarea/<int:pk>/finalizar/', views.finalizar_tarea, name='finalizar_tarea'),
     path('tecnico/tarea/<int:pk>/guardar-progreso/', views.guardar_progreso_preventivo, name='guardar_progreso_preventivo'),
     
-    # --- NUEVA RUTA PARA PDF ---
+    # --- RUTA PARA PDF ---
     path('tecnico/tarea/<int:pk>/generar-pdf/', views.generar_pdf_mantenimiento, name='generar_pdf'),
 
     # --- URLs de Catálogo de Herramientas (Admin) ---
@@ -35,5 +36,13 @@ urlpatterns = [
     path('admin/correctivo/nueva/', views.CatalogoCorrectivoCreateView.as_view(), name='correctivo_crear'),
     path('admin/correctivo/<int:pk>/editar/', views.CatalogoCorrectivoUpdateView.as_view(), name='correctivo_editar'),
     path('admin/correctivo/<int:pk>/eliminar/', views.CatalogoCorrectivoDeleteView.as_view(), name='correctivo_eliminar'),
-    path('admin/tarea/<int:pk>/eliminar/', views.TareaMantenimientoDeleteView.as_view(), name='admin_tarea_eliminar'),
+    
+    # --- RUTAS DE CIERRE (ADMIN Y SUPERVISOR) ---
+    # Estas son las rutas correctas para el panel de "Descartar o Poner Diesel"
+    path('gestion/cierre-mantenimiento/', 
+         views.CierreMantenimientoListView.as_view(), 
+         name='cierre_list'),
+    path('gestion/cierre-mantenimiento/<int:pk>/procesar/', 
+         views.procesar_cierre_mantenimiento, 
+         name='cierre_procesar'),
 ]

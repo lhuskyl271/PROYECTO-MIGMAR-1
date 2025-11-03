@@ -4,6 +4,7 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views import *
 
+
 urlpatterns = [
     # =============================================================
     # AUTENTICACIÓN Y PÁGINAS PRINCIPALES
@@ -125,4 +126,5 @@ urlpatterns = [
     path('entregas/<int:pk>/editar/', EntregaSuministrosUpdateView.as_view(), name='entrega-suministros-update'),
     path('entregas/<int:pk>/eliminar/', EntregaSuministrosDeleteView.as_view(), name='entrega-suministros-delete'),
     path('api/search/operadores/', search_operadores_api, name='operador-search-api'),
+    path('proceso/elegir-tipo/<int:unidad_pk>/', EncargadoElegirTipoProcesoView.as_view(), name='encargado-elegir-tipo-proceso'),
 ]

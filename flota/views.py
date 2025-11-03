@@ -47,6 +47,9 @@ from botocore.exceptions import BotoCoreError, NoCredentialsError
 from django.conf import settings
 import os
 from .utils import recalcular_costos_cargas_diesel, recalcular_costos_cargas_urea
+from django import forms  # Necesario para el nuevo form
+from django.db import models # Necesario para la lógica de 'dummy'
+from .forms import OperadorSelectionForm # El nuevo formulario
 # ===================================================
 
 
@@ -728,6 +731,7 @@ class ChecklistListView(AdminRequiredMixin, ListView):
     def get_queryset(self):
         # La lógica de filtrado que ya tenías era correcta, la mantenemos.
         queryset = ChecklistInspeccion.objects.select_related('unidad', 'operador', 'tecnico').order_by('-fecha')
+        queryset = queryset.filter(es_dummy=False)
         unidad_id = self.request.GET.get('unidad')
         tecnico_id = self.request.GET.get('tecnico')
         start_date_str = self.request.GET.get('start_date')
@@ -977,6 +981,7 @@ class LlantasInspeccionListView(AdminRequiredMixin, ListView):
     # --- MÉTODO MODIFICADO ---
     def get_queryset(self):
         queryset = LlantasInspeccion.objects.select_related('unidad', 'tecnico').order_by('-fecha')
+        queryset = queryset.filter(es_dummy=False)
         
         # Lógica de filtrado añadida
         unidad_id = self.request.GET.get('unidad')
@@ -1183,24 +1188,88 @@ class SeleccionarUnidadView(IniciaProcesoRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         """
-        Añade el término de búsqueda al contexto para que pueda ser mostrado
-        en el campo de texto del formulario después de una búsqueda.
+        Añade el término de búsqueda al contexto y determina la URL de
+        siguiente paso para cada unidad basado en el rol del usuario.
         """
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('q', '')
+        
+        # Determinar la URL del siguiente paso para cada unidad
+        unidades_con_url = []
+        # Comprobamos el rol del usuario UNA VEZ
+        user_es_encargado = es_encargado(self.request.user)
+        
+        for unidad in context['unidades']:
+            if user_es_encargado:
+                # Los Encargados van a la nueva vista de selección de tipo de proceso
+                unidad.proceso_url = reverse('encargado-elegir-tipo-proceso', kwargs={'unidad_pk': unidad.pk})
+            else:
+                # Los Técnicos (u otros roles) van directo al checklist
+                unidad.proceso_url = reverse('proceso-checklist', kwargs={'unidad_pk': unidad.pk})
+            unidades_con_url.append(unidad)
+        
+        # Reemplaza la lista de unidades original con la lista modificada
+        context['unidades'] = unidades_con_url
+        
         return context
 
 class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
-    """Step 2 (Common): Fill out the Checklist."""
+    """Paso 2 (Común): Llenar el Checklist."""
     form_class = ChecklistInspeccionForm
     template_name = 'checklist_form.html'
 
+    def get_initial(self):
+        """
+        --- MÉTODO CORREGIDO ---
+        Establece valores iniciales. Obtiene el operador de la sesión
+        (si el Encargado lo eligió) y pre-llena 'BIEN' si el usuario es Encargado.
+        """
+        # Limpiamos IDs de procesos anteriores por si acaso
+        self.request.session.pop('proceso_checklist_id', None)
+        
+        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
+        initial = {'unidad': unidad}
+
+        # --- LÓGICA AÑADIDA: LEER OPERADOR DE LA SESIÓN ---
+        # Obtener el operador que el Encargado seleccionó en el paso anterior
+        operador_id = self.request.session.get('proceso_operador_id')
+        if operador_id:
+            try:
+                operador = Operador.objects.get(pk=operador_id)
+                initial['operador'] = operador
+            except Operador.DoesNotExist:
+                # Si el operador no existe, borramos la sesión para evitar errores
+                self.request.session.pop('proceso_operador_id', None)
+                messages.warning(self.request, "El operador seleccionado ya no es válido. Por favor, selecciónelo de nuevo.")
+        # --- FIN LÓGICA AÑADIDA ---
+
+        # Si el usuario es Encargado, pre-llenar todo como 'BIEN'
+        if es_encargado(self.request.user):
+            for field in ChecklistInspeccion._meta.get_fields():
+                if isinstance(field, models.CharField) and hasattr(field, 'choices') and field.choices:
+                    initial[field.name] = 'BIEN'
+        
+        return initial
+
     def get_context_data(self, **kwargs):
+        """
+        --- MÉTODO CORREGIDO ---
+        Añade lógica para deshabilitar el campo de operador si ya fue seleccionado.
+        """
         context = super().get_context_data(**kwargs)
         unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
-        context['titulo'] = f"Step 1: Checklist for Unit {unidad.nombre}"
+        context['titulo'] = f"Paso 1: Checklist para Unidad {unidad.nombre}"
         context['unidad'] = unidad
         form = context.get('form')
+        
+        # --- LÓGICA AÑADIDA: DESHABILITAR CAMPO ---
+        # Si el operador viene pre-seleccionado (desde la sesión), 
+        # deshabilitamos el campo para que no se pueda cambiar.
+        if 'operador' in form.initial:
+            form.fields['operador'].disabled = True
+        # --- FIN LÓGICA AÑADIDA ---
+
+        # El resto de la lógica para estructurar el formulario se mantiene igual
         field_groups = {
             'Estructura Exterior': ['cristales', 'espejos', 'logos', 'num_economico', 'puertas', 'cofre', 'parrilla', 'defensas', 'faros', 'plafoneria', 'stops', 'direccionales', 'tapiceria', 'instrumentos', 'carroceria', 'piso', 'costados', 'escape', 'pintura', 'franjas', 'loderas', 'extintor', 'senalamientos', 'estado_general'],
             'Mecánica y Motor': ['motor', 'caja', 'diferenciales', 'suspension_delantera', 'suspension_trasera', 'fugas_combustible', 'fugas_aceite', 'estado_llantas', 'presion_llantas', 'purga_tanques', 'estado_balatas', 'amortiguadores_delanteros', 'amortiguadores_traseros', 'rines_aluminio', 'mangueras_servicio', 'tarjeta_llave', 'revision_fusibles', 'revision_luces','revision_fuga_aire']
@@ -1211,100 +1280,58 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
             for field_name in field_list:
                 if field_name in form.fields:
                     obs_field_name = f"{field_name}_obs"
-                    # --- INICIO DE LÓGICA MODIFICADA ---
                     foto_field_name = f"{field_name}_foto"
                     structured_form[group_name].append({
                         'status': form[field_name], 
                         'observation': form[obs_field_name] if obs_field_name in form.fields else None,
                         'evidence': form[foto_field_name] if foto_field_name in form.fields else None
                     })
-                    # --- FIN DE LÓGICA MODIFICADA ---
         context['structured_form'] = structured_form
         return context
 
-    def get_initial(self):
-        """
-        --- MÉTODO ACTUALIZADO ---
-        Establece valores iniciales. Si el usuario es un 'Encargado',
-        pre-llena todos los campos de estado como 'BIEN'.
-        """
-        # Primero, limpiamos la sesión de datos de procesos anteriores.
-        self.request.session.pop('proceso_checklist_id', None)
-        
-        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
-        initial = {'unidad': unidad}
-
-        # Verificamos si el usuario pertenece al grupo 'Encargado'.
-        if es_encargado(self.request.user):
-            # Iteramos sobre todos los campos definidos en el modelo del checklist.
-            for field in ChecklistInspeccion._meta.get_fields():
-                # Buscamos solo los campos que son de tipo CharField y tienen opciones (BIEN/MALO).
-                if isinstance(field, models.CharField) and hasattr(field, 'choices') and field.choices:
-                    # Añadimos el campo al diccionario de valores iniciales con el valor 'BIEN'.
-                    initial[field.name] = 'BIEN'
-        
-        return initial
-
-    # === INICIO: MÉTODO MODIFICADO PARA S3 MANUAL ===
     def form_valid(self, form):
         """
-        Guarda el formulario manualmente, subiendo archivos a S3
-        y manejando la transacción de forma atómica.
+        --- MÉTODO CORREGIDO ---
+        Añade lógica para limpiar el ID del operador de la sesión después de guardar.
         """
+        # --- LÓGICA AÑADIDA: LIMPIAR SESIÓN ---
+        # Limpiar la sesión del operador, ya no se necesita para los siguientes pasos
+        self.request.session.pop('proceso_operador_id', None)
+        # --- FIN LÓGICA AÑADIDA ---
+        
         try:
             with transaction.atomic():
-                # 1. Asigna los datos que no vienen del formulario
+                # El resto de la lógica de guardado se mantiene igual
                 form.instance.tecnico = self.request.user
                 form.instance.unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
                 
-                # 2. Crea el objeto en memoria (aún no en la BD)
                 checklist_obj = form.save(commit=False)
                 
-                # 3. Iterar y subir archivos
-                
-                # === INICIO DE LA CORRECCIÓN ===
-                # Obtenemos la fecha actual AHORA.
-                # El campo `checklist_obj.fecha` es 'None' en este punto
-                # porque `auto_now_add=True` solo lo asigna cuando se
-                # ejecuta el .save() en la base de datos.
-                # Usamos timezone.now() para la fecha.
                 fecha_actual = timezone.now()
                 fecha_str = fecha_actual.strftime('%Y-%m-%d')
-                # === FIN DE LA CORRECCIÓN ===
                 
                 for field_name, archivo in self.request.FILES.items():
                     _nombre_base, extension = os.path.splitext(archivo.name)
-                    # Define la ruta de S3 usando la fecha_str que acabamos de crear
                     s3_path = f"flota/checklists/{checklist_obj.unidad.nombre}/{fecha_str}/{field_name}{extension}"
                     
                     ruta_guardada = _subir_archivo_a_s3(archivo, s3_path)
                     
                     if ruta_guardada:
-                        # Asigna la ruta de S3 al campo del modelo
                         setattr(checklist_obj, field_name, ruta_guardada)
                     else:
                         messages.error(self.request, f"Error al subir el archivo {field_name}.")
-                        # Esto abortará la transacción atómica
                         raise Exception(f"Fallo al subir {field_name}")
                 
-                # 4. Ahora sí, guardar el objeto en la base de datos
-                # En este punto, `auto_now_add=True` asignará la fecha
-                # a checklist_obj.fecha. Será casi idéntica a la que
-                # usamos para la ruta de S3.
                 checklist_obj.save()
             
-            # 5. Si todo salió bien, guarda el ID en la sesión
             self.request.session['proceso_checklist_id'] = checklist_obj.id
             messages.success(self.request, "Checklist guardado. Ahora, por favor, complete la inspección de llantas.")
             
-            # 6. Redirige al siguiente paso del proceso.
             return redirect('proceso-llantas', unidad_pk=self.kwargs['unidad_pk'])
 
         except Exception as e:
-            # Captura el error de la subida de S3 o cualquier otro.
             messages.error(self.request, f"Ocurrió un error al guardar el checklist: {e}")
             return self.form_invalid(form)
-    # === FIN: MÉTODO MODIFICADO ===
         
 class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
     """Step 3 (Common): Fill out Tire form and send to PENDING."""
@@ -3227,3 +3254,108 @@ def search_operadores_api(request):
     operadores = Operador.objects.filter(Q(nombre__icontains=term) | Q(apellido__icontains=term))[:15]
     results = [{'id': o.id, 'text': f"{o.nombre} {o.apellido}"} for o in operadores]
     return JsonResponse({'results': results}) #121
+
+
+class EncargadoElegirTipoProcesoView(EncargadoRequiredMixin, FormView):
+    """
+    Paso Intermedio (Solo Encargado): Elegir Operador y tipo de proceso.
+    - GET: Muestra el formulario para seleccionar operador.
+    - POST: Procesa la elección (Proceso Completo o Solo Carga).
+    """
+    template_name = 'encargado_elegir_tipo_proceso.html'
+    form_class = OperadorSelectionForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
+        context['unidad'] = unidad
+        context['titulo'] = f"Iniciar Proceso para {unidad.nombre}"
+        return context
+
+    def form_valid(self, form):
+        """
+        Se llama cuando el formulario de operador es válido.
+        Decidimos qué hacer basado en el botón presionado.
+        """
+        operador = form.cleaned_data['operador']
+        unidad_pk = self.kwargs['unidad_pk']
+        
+        # Guardamos el operador en la sesión para el siguiente paso
+        self.request.session['proceso_operador_id'] = operador.id
+
+        if 'proceso_completo' in self.request.POST:
+            # Opción 1: Proceso Completo
+            # Redirigir al checklist
+            return redirect('proceso-checklist', unidad_pk=unidad_pk)
+        
+        elif 'solo_carga' in self.request.POST:
+            # Opción 2: Solo Carga
+            # Llamar a la lógica para crear dummies y redirigir
+            return self.crear_proceso_solo_carga(operador)
+        
+        else:
+            messages.error(self.request, "Acción no reconocida.")
+            return self.form_invalid(form)
+
+    def crear_proceso_solo_carga(self, operador):
+        """
+        Crea los objetos "dummy" (falsos) y el ProcesoCarga para el flujo de "Solo Carga".
+        Esto simula que el checklist y las llantas se completaron instantáneamente.
+        """
+        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
+        tecnico = self.request.user # El "Encargado" es el técnico que inicia
+
+        try:
+            with transaction.atomic():
+                # 1. Crear Checklist "dummy"
+                dummy_checklist = ChecklistInspeccion(
+                    unidad=unidad,
+                    operador=operador,
+                    tecnico=tecnico,
+                    es_dummy=True  # <-- INICIO DE MODIFICACIÓN
+                )
+                
+                # Iterar sobre todos los campos de 'BIEN/MALO' y marcarlos como 'BIEN'
+                for field in ChecklistInspeccion._meta.get_fields():
+                    if isinstance(field, models.CharField) and hasattr(field, 'choices') and field.choices:
+                        setattr(dummy_checklist, field.name, 'BIEN')
+                
+                dummy_checklist.save() # Guardar el checklist dummy
+                
+                # 2. Crear LlantasInspeccion "dummy"
+                dummy_llantas = LlantasInspeccion.objects.create(
+                    unidad=unidad,
+                    tecnico=tecnico,
+                    km=unidad.km_actual,
+                    es_dummy=True  # <-- FIN DE MODIFICACIÓN
+                )
+                
+                # 3. Crear el ProcesoCarga
+                proceso_carga_obj = ProcesoCarga.objects.create(
+                    # ... (el resto de la función sigue igual) ...
+                    unidad=unidad,
+                    checklist=dummy_checklist,
+                    inspeccion_llantas=dummy_llantas,
+                    tecnico_inicia=tecnico,
+                    status='PENDIENTE'
+                )
+                
+                # 4. Actualizar AsignacionRevision si existe
+                try:
+                    asignacion_del_dia = AsignacionRevision.objects.get(
+                        unidad=proceso_carga_obj.unidad,
+                        fecha_revision=timezone.localdate(proceso_carga_obj.fecha_inicio),
+                        status='PENDIENTE'
+                    )
+                    asignacion_del_dia.status = 'EN_PROCESO'
+                    asignacion_del_dia.save()
+                except AsignacionRevision.DoesNotExist:
+                    pass # No pasa nada si no había una asignación
+
+            # 5. Redirigir al paso de Diésel
+            messages.success(self.request, f"Proceso 'Solo Carga' iniciado para {unidad.nombre}. Por favor, ingrese los datos de diésel.")
+            return redirect('encargado-proceso-diesel', proceso_pk=proceso_carga_obj.pk)
+
+        except Exception as e:
+            messages.error(self.request, f"Error al crear el proceso 'Solo Carga': {e}")
+            return redirect('encargado-elegir-tipo-proceso', unidad_pk=unidad.pk)

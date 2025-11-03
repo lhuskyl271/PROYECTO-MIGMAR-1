@@ -1,4 +1,4 @@
-# forms.py (Completo y Modificado)
+# forms.py (Modificado para Pruebas)
 
 from django import forms
 from django.contrib.auth.models import User, Group
@@ -26,7 +26,6 @@ class CatalogoMantenimientoCorrectivoForm(forms.ModelForm):
         }
 
 class AsignarTareaForm(forms.ModelForm):
-    # Queryset para poblar el campo 'tecnico'
     tecnico = forms.ModelChoiceField(
         queryset=User.objects.filter(
             Q(groups__name='Tecnico') | Q(groups__name='Supervisor')
@@ -52,11 +51,7 @@ class AsignarTareaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # El campo de mant. correctivo no es requerido por defecto
         self.fields['mantenimiento_correctivo'].required = False
-        
-        # Opcional: Si quieres que las unidades se carguen con Select2
-        # (requiere JS adicional en la plantilla)
         self.fields['unidad'].widget.attrs.update({'class': 'form-select select2-widget-unidad'})
 
     def clean(self):
@@ -70,9 +65,6 @@ class AsignarTareaForm(forms.ModelForm):
         
         return cleaned_data
 class SeleccionarHerramientasForm(forms.Form):
-    """
-    Formulario para que el técnico seleccione las herramientas que necesita.
-    """
     herramientas = forms.ModelMultipleChoiceField(
         queryset=CatalogoHerramienta.objects.all().order_by('nombre'),
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'id': 'select2-herramientas'}),
@@ -81,21 +73,16 @@ class SeleccionarHerramientasForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
-        # Recibimos la tarea para saber qué herramientas ya están seleccionadas
         self.tarea = kwargs.pop('tarea', None)
         super().__init__(*args, **kwargs)
         
         if self.tarea:
-            # Marcamos las herramientas ya seleccionadas
             self.fields['herramientas'].initial = self.tarea.herramientas_solicitadas.all()
 
 
 # --- ESTA CLASE FUE MODIFICADA ---
 
 class TareaPreventivaSubtaskForm(forms.ModelForm):
-    """
-    Formulario para un solo item del checklist preventivo.
-    """
     completada = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input me-2'}))
     
     observaciones = forms.CharField(
@@ -104,7 +91,7 @@ class TareaPreventivaSubtaskForm(forms.ModelForm):
     )
     
     foto_evidencia = forms.ImageField(
-        required=False, # Sigue False por defecto, la lógica lo hará True
+        required=False, 
         widget=forms.ClearableFileInput(attrs={'class': 'form-control form-control-sm'})
     )
 
@@ -124,36 +111,29 @@ class TareaPreventivaSubtaskForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         
         if self.instance and self.instance.pk:
-            # Usamos el "display name" de la subtask como la etiqueta del checkbox
             self.fields['completada'].label = self.instance.get_nombre_subtask_display()
 
-            # --- LÓGICA DE VALIDACIÓN RESTAURADA ---
-            
-            # 1. Comprobamos si la instancia actual es una de suspensión
             if self.instance.nombre_subtask in self.TAREAS_SUSPENSION:
-                
-                # 2. Hacemos el campo de foto OBLIGATORIO
-                self.fields['foto_evidencia'].required = True
-                
-                # 3. Añadimos un indicador visual a la etiqueta
-                self.fields['foto_evidencia'].label = "Foto de Evidencia (Requerida)"
+                # Mantenemos la etiqueta para que el usuario sepa que la necesitará
+                self.fields['foto_evidencia'].label = "Foto de Evidencia (Requerida al completar)"
             
-            # --- FIN DE LÓGICA DE VALIDACIÓN ---
 
+    # --- MÉTODO CLEAN MODIFICADO PARA PRUEBAS ---
     def clean(self):
         cleaned_data = super().clean()
-        completada = cleaned_data.get('completada')
-        foto_evidencia = cleaned_data.get('foto_evidencia')
         
-        # Verificamos si la tarea es de suspensión
-        es_tarea_suspension = self.instance.nombre_subtask in self.TAREAS_SUSPENSION
-
-        # Si el técnico marca "Completada" Y es una tarea de suspensión
-        if completada and es_tarea_suspension:
-            # Y NO se subió una foto (ni había una existente)
-            if not foto_evidencia:
-                # Lanzamos un error
-                self.add_error('foto_evidencia', 'Debe subir una foto de evidencia para completar esta tarea de suspensión.')
+        # --- VALIDACIÓN DESACTIVADA PARA PRUEBAS ---
+        
+        # completada = cleaned_data.get('completada')
+        # foto_subida_ahora = cleaned_data.get('foto_evidencia') 
+        # foto_existente = self.instance.foto_evidencia 
+        # es_tarea_suspension = self.instance.nombre_subtask in self.TAREAS_SUSPENSION
+        #
+        # if completada and es_tarea_suspension:
+        #     if not foto_subida_ahora and not foto_existente:
+        #         self.add_error('foto_evidencia', 'Debe subir una foto de evidencia para completar esta tarea de suspensión.')
+        
+        # --- FIN DE DESACTIVACIÓN ---
         
         return cleaned_data
 

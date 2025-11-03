@@ -22,8 +22,8 @@
                 <div class="row">
                     {% for unidad in unidades %}
                     <div class="col-xl-3 col-md-4 col-sm-6 mb-4">
-                        <a href="{% url 'proceso-checklist' unidad.pk %}" class="card-link">
-                            <div class="card h-100 text-center shadow-sm card-hover">
+                        <a href="{{ unidad.proceso_url }}" class="card-link">
+                        <div class="card h-100 text-center shadow-sm card-hover">
                                 <div class="card-body d-flex flex-column justify-content-center align-items-center">
                                     <i class="fas fa-truck fa-4x mb-3 text-primary"></i>
                                     <h5 class="card-title font-weight-bold">{{ unidad.nombre }}</h5>

@@ -238,6 +238,7 @@ class ChecklistInspeccion(models.Model):
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE)
     operador = models.ForeignKey(Operador, on_delete=models.CASCADE)
     tecnico = models.ForeignKey(User, on_delete=models.CASCADE)
+    es_dummy = models.BooleanField(default=False, verbose_name="Es un registro 'Solo Carga'")
     
     # --- INICIO DE LA CORRECCIÓN ---
     # Estos son los campos correctos para el Checklist
@@ -329,6 +330,7 @@ class LlantasInspeccion(models.Model):
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name='inspecciones_llantas')
     tecnico = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     km = models.PositiveIntegerField(verbose_name="Kilometraje en Inspección")
+    es_dummy = models.BooleanField(default=False, verbose_name="Es un registro 'Solo Carga'")
 
     def __str__(self):
         return f"Inspección de Llantas para {self.unidad} el {self.fecha.strftime('%Y-%m-%d')}"

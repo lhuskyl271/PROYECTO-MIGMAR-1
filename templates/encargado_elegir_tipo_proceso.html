@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">{{ titulo }}</h4>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Unidad seleccionada: <strong>{{ unidad.nombre }}</strong></p>
+                    
+                    <form method="POST" action="{% url 'encargado-elegir-tipo-proceso' unidad_pk=unidad.pk %}">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <p class="mb-2"><strong>Paso 1:</strong> Seleccione el operador que recibirá la unidad.</p>
+                            {{ form|crispy }}
+                        </div>
+                        
+                        <hr>
+
+                        <p class="mb-2"><strong>Paso 2:</strong> Elija el tipo de proceso a realizar.</p>
+                        <div class="d-grid gap-3">
+                            <button type="submit" name="proceso_completo" class="btn btn-primary btn-lg">
+                                <i class="fas fa-clipboard-list me-2"></i>
+                                Proceso Completo (Checklist + Llantas + Carga)
+                            </button>
+                            
+                            <button type="submit" name="solo_carga" class="btn btn-success btn-lg">
+                                <i class="fas fa-gas-pump me-2"></i>
+                                Solo Carga (Saltar a Diésel y Urea)
+                            </button>
+                        </div>
+                    </form>
+                    
+                </div>
+                <div class="card-footer text-center bg-light">
+                    <a href="{% url 'tecnico-seleccionar-unidad' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        Cancelar y Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
