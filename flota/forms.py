@@ -259,46 +259,50 @@ MAX_CAPACIDAD_ACEITE = 2000
 class CompraSuministroForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
-        tipo_suministro = cleaned_data.get('tipo_suministro')
-        cantidad_compra = cleaned_data.get('cantidad', 0) or 0
-
-        if tipo_suministro == 'OTRO' or cantidad_compra <= 0:
-            return cleaned_data
-
-        qs_compras = CompraSuministro.objects.filter(tipo_suministro=tipo_suministro)
-        if self.instance.pk:
-            qs_compras = qs_compras.exclude(pk=self.instance.pk)
-
-        inventario_actual = 0
-        capacidad_maxima = 0
-
-        if tipo_suministro == 'DIESEL':
-            total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
-            consumo_motor = CargaDiesel.objects.aggregate(total=Sum('lts_diesel'))['total'] or 0
-            consumo_thermo = CargaDiesel.objects.aggregate(total=Sum('lts_thermo'))['total'] or 0
-            inventario_actual = total_comprado - (consumo_motor + consumo_thermo)
-            capacidad_maxima = MAX_CAPACIDAD_DIESEL
         
-        elif tipo_suministro == 'UREA':
-            total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
-            total_consumido = CargaUrea.objects.aggregate(total=Sum('litros_cargados'))['total'] or 0
-            inventario_actual = total_comprado - total_consumido
-            capacidad_maxima = MAX_CAPACIDAD_UREA
-
-        elif tipo_suministro == 'ACEITE':
-            total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
-            total_consumido = CargaAceite.objects.aggregate(total=Sum('cantidad'))['total'] or 0
-            inventario_actual = total_comprado - total_consumido
-            capacidad_maxima = MAX_CAPACIDAD_ACEITE
-
-        espacio_disponible = capacidad_maxima - inventario_actual
-        if cantidad_compra > espacio_disponible:
-            raise ValidationError(
-                f"La compra excede la capacidad del tanque. "
-                f"Inventario actual (sin esta compra): {inventario_actual:.2f} L. "
-                f"Espacio disponible: {espacio_disponible:.2f} L. "
-                f"Está intentando comprar {cantidad_compra} L."
-            )
+        # --- INICIO: VALIDACIÓN DE CAPACIDAD DESACTIVADA ---
+        # tipo_suministro = cleaned_data.get('tipo_suministro')
+        # cantidad_compra = cleaned_data.get('cantidad', 0) or 0
+        #
+        # if tipo_suministro == 'OTRO' or cantidad_compra <= 0:
+        #     return cleaned_data
+        #
+        # qs_compras = CompraSuministro.objects.filter(tipo_suministro=tipo_suministro)
+        # if self.instance.pk:
+        #     qs_compras = qs_compras.exclude(pk=self.instance.pk)
+        #
+        # inventario_actual = 0
+        # capacidad_maxima = 0
+        #
+        # if tipo_suministro == 'DIESEL':
+        #     total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
+        #     consumo_motor = CargaDiesel.objects.aggregate(total=Sum('lts_diesel'))['total'] or 0
+        #     consumo_thermo = CargaDiesel.objects.aggregate(total=Sum('lts_thermo'))['total'] or 0
+        #     inventario_actual = total_comprado - (consumo_motor + consumo_thermo)
+        #     capacidad_maxima = MAX_CAPACIDAD_DIESEL
+        #
+        # elif tipo_suministro == 'UREA':
+        #     total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
+        #     total_consumido = CargaUrea.objects.aggregate(total=Sum('litros_cargados'))['total'] or 0
+        #     inventario_actual = total_comprado - total_consumido
+        #     capacidad_maxima = MAX_CAPACIDAD_UREA
+        #
+        # elif tipo_suministro == 'ACEITE':
+        #     total_comprado = qs_compras.aggregate(total=Sum('cantidad'))['total'] or 0
+        #     total_consumido = CargaAceite.objects.aggregate(total=Sum('cantidad'))['total'] or 0
+        #     inventario_actual = total_comprado - total_consumido
+        #     capacidad_maxima = MAX_CAPACIDAD_ACEITE
+        #
+        # espacio_disponible = capacidad_maxima - inventario_actual
+        # if cantidad_compra > espacio_disponible:
+        #     raise ValidationError(
+        #         f"La compra excede la capacidad del tanque. "
+        #         f"Inventario actual (sin esta compra): {inventario_actual:.2f} L. "
+        #         f"Espacio disponible: {espacio_disponible:.2f} L. "
+        #         f"Está intentando comprar {cantidad_compra} L."
+        #     )
+        # --- FIN: VALIDACIÓN DE CAPACIDAD DESACTIVADA ---
+            
         return cleaned_data
 
     class Meta:

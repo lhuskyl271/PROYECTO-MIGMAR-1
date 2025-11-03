@@ -248,15 +248,15 @@ if ON_RENDER:
 
 INVENTORY_ALERT_SETTINGS = {
     'DIESEL': {
-        'threshold': 4000,  # Litros
+        'threshold': 3500,  # Litros
         'recipients': ['estadisticas@transportesmigmar.com', 'gerenciageneral@transportesmigmar.com','almacen@transportesmigmar.com'],
     },
     'UREA': {
-        'threshold': 450,   # Litros
+        'threshold': 250,   # Litros
         'recipients': ['estadisticas@transportesmigmar.com', 'gerenciageneral@transportesmigmar.com','almacen@transportesmigmar.com'],
     },
     'ACEITE': {
-        'threshold': 90,    # Litros
+        'threshold': 45,    # Litros
         'recipients': ['estadisticas@transportesmigmar.com', 'gerenciageneral@transportesmigmar.com','almacen@transportesmigmar.com'],
     },
 }
