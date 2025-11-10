@@ -8,7 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.utils.dateparse import parse_date
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Q
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, FieldDoesNotExist
 from decimal import Decimal
 from datetime import date, timedelta, datetime
 from django.views.generic.edit import FormView
@@ -2567,6 +2567,7 @@ def download_unidades_excel(request):
     return response
 
 
+
 @login_required
 def corregir_checklist_mal_view(request):
     
@@ -2584,20 +2585,20 @@ def corregir_checklist_mal_view(request):
     ).select_related(
         'inspeccion', 
         'inspeccion__unidad',
-        'inspeccion__tecnico' # <-- Añadir 'inspeccion__tecnico'
+        'inspeccion__tecnico'
     ).order_by(
-        'inspeccion__fecha', # Segregado por fecha de inspección
+        'inspeccion__fecha', 
         'inspeccion__unidad__nombre'
     )
     
-    # --- INICIO: LÓGICA DE FILTROS GET MODIFICADA ---
+    # --- Lógica de filtros (sin cambios) ---
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     unidad_id = request.GET.get('unidad')
-    tecnico_id = request.GET.get('tecnico') # <-- NUEVA LÍNEA
+    tecnico_id = request.GET.get('tecnico')
     
     selected_unidad = None
-    selected_tecnico = None # <-- NUEVA LÍNEA
+    selected_tecnico = None
 
     if start_date_str and end_date_str:
         try:
@@ -2612,13 +2613,11 @@ def corregir_checklist_mal_view(request):
         queryset = queryset.filter(inspeccion__unidad_id=unidad_id)
         selected_unidad = Unidad.objects.filter(pk=unidad_id).first()
 
-    # --- NUEVO: Procesar filtro de técnico ---
     if tecnico_id:
         queryset = queryset.filter(inspeccion__tecnico_id=tecnico_id)
         selected_tecnico = User.objects.filter(pk=tecnico_id).first()
-    # --- FIN: LÓGICA DE FILTROS GET MODIFICADA ---
     
-    
+    # --- Lógica del POST (sin cambios) ---
     if request.method == 'POST':
         formset = ChecklistCorreccionFormSet(request.POST, queryset=queryset)
         
@@ -2636,6 +2635,16 @@ def corregir_checklist_mal_view(request):
                         marcar_descartado = form.cleaned_data.get('marcar_descartado')
                         inspeccion_original = instance.inspeccion
                         
+                        # --- INICIO DE LA CORRECCIÓN DE SEGURIDAD ---
+                        # Verificamos si el campo aún existe antes de intentar modificarlo
+                        if not hasattr(inspeccion_original, instance.nombre_campo):
+                            # Si no existe, solo guardamos el estado de la corrección y continuamos
+                            instance.save()
+                            if marcar_corregido: correcciones_count += 1
+                            if marcar_descartado: descartes_count += 1
+                            continue 
+                        # --- FIN DE LA CORRECCIÓN DE SEGURIDAD ---
+
                         if marcar_corregido:
                             instance.status = 'CORREGIDO'
                             instance.comentario_admin = form.cleaned_data.get('comentario_admin', '')
@@ -2663,14 +2672,15 @@ def corregir_checklist_mal_view(request):
                             comentarios_count += 1
 
                 messages.success(request, f"Proceso completado: {correcciones_count} ítems corregidos, {descartes_count} ítems descartados, {comentarios_count} comentarios actualizados.")
-                
                 return redirect(request.get_full_path())
         else:
             messages.error(request, "Error en el formulario. Por favor, revisa los datos.")
     else:
         formset = ChecklistCorreccionFormSet(queryset=queryset)
 
-    # 3. Lógica de Agrupación por Fecha para el Template
+    # ===================================================================
+    # === INICIO DE LA CORRECCIÓN: Lógica de Agrupación para Template ===
+    # ===================================================================
     items_agrupados = {}
     form_map = {form.instance.id: form for form in formset} 
     
@@ -2680,12 +2690,26 @@ def corregir_checklist_mal_view(request):
             items_agrupados[fecha_inspeccion] = []
         
         detalle.form = form_map.get(detalle.id)
-        detalle.etiqueta_legible = detalle.inspeccion._meta.get_field(detalle.nombre_campo).verbose_name or detalle.nombre_campo.replace('_', ' ').title()
         
-        foto_obj = getattr(detalle.inspeccion, f"{detalle.nombre_campo}_foto", None)
-        detalle.foto = foto_obj
-        
-        items_agrupados[fecha_inspeccion].append(detalle)
+        try:
+            # 1. Intenta obtener la información del campo como siempre
+            detalle.etiqueta_legible = detalle.inspeccion._meta.get_field(detalle.nombre_campo).verbose_name or detalle.nombre_campo.replace('_', ' ').title()
+            foto_obj = getattr(detalle.inspeccion, f"{detalle.nombre_campo}_foto", None)
+            detalle.foto = foto_obj
+            
+            # 2. Si todo sale bien, lo añadimos a la lista para mostrarlo
+            items_agrupados[fecha_inspeccion].append(detalle)
+            
+        except FieldDoesNotExist:
+        # --- FIN DE LA MODIFICACIÓN ---
+            # 3. ¡AQUÍ ESTÁ LA MAGIA! Si el campo no existe, simplemente ignoramos este
+            #    registro de corrección y continuamos con el siguiente.
+            print(f"ADVERTENCIA: Omitiendo corrección obsoleta (ID: {detalle.id}). El campo '{detalle.nombre_campo}' ya no existe en el modelo ChecklistInspeccion.")
+            continue
+            
+    # ===================================================================
+    # === FIN DE LA CORRECCIÓN ==========================================
+    # ===================================================================
 
     data_for_template = [
         {'fecha': fecha, 'detalles': detalles} 
@@ -2696,11 +2720,10 @@ def corregir_checklist_mal_view(request):
         'titulo': 'Panel de Corrección de Checklist (MALO)',
         'items_agrupados': data_for_template,
         'formset': formset,
-        # --- Pasar nuevos filtros a la plantilla ---
         'start_date': start_date_str,
         'end_date': end_date_str,
         'selected_unidad': selected_unidad,
-        'selected_tecnico': selected_tecnico, # <-- NUEVA LÍNEA
+        'selected_tecnico': selected_tecnico,
     }
     
     return render(request, 'flota/corregir_checklist_mal.html', context)
