@@ -7,7 +7,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, T
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.utils.dateparse import parse_date
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q,Count
 from django.core.exceptions import PermissionDenied, FieldDoesNotExist
 from decimal import Decimal
 from datetime import date, timedelta, datetime
@@ -50,6 +50,7 @@ from .utils import recalcular_costos_cargas_diesel, recalcular_costos_cargas_ure
 from django import forms  # Necesario para el nuevo form
 from django.db import models # Necesario para la lógica de 'dummy'
 from .forms import OperadorSelectionForm # El nuevo formulario
+from .forms import AsignacionRevisionForm # <-- Importante
 # ===================================================
 
 
@@ -1146,43 +1147,31 @@ class SeleccionarUnidadView(IniciaProcesoRequiredMixin, ListView):
 
     def dispatch(self, request, *args, **kwargs):
         """
-        Intercepta la solicitud ANTES de que la vista se ejecute.
-        Comprueba si el usuario tiene un checklist guardado en la sesión que
-        aún no ha sido vinculado a una inspección de llantas.
+        ================================================================
+        --- SECCIÓN MODIFICADA ---
+        Se ha eliminado la lógica de redirección de aquí.
+        Ahora la vista cargará normalmente, y la lógica de "pendiente"
+        se manejará en 'get_context_data' para mostrarla en la plantilla.
+        ================================================================
         """
+        # Si el checklist no existe (por alguna razón), limpiamos la sesión
+        # Esta es la única lógica que vale la pena conservar aquí, como limpieza.
         checklist_id_pendiente = request.session.get('proceso_checklist_id')
-
         if checklist_id_pendiente:
-            try:
-                # Verificamos que el checklist realmente exista en la BD
-                checklist = ChecklistInspeccion.objects.get(pk=checklist_id_pendiente)
-                unidad_pk = checklist.unidad.id
-                
-                # Enviamos un mensaje de advertencia al usuario
-                messages.warning(
-                    request, 
-                    f"Tiene una inspección de llantas pendiente para la unidad '{checklist.unidad.nombre}'. "
-                    "Por favor, complétela para poder iniciar un nuevo proceso."
-                )
-                # Lo redirigimos a la pantalla de llenado de llantas
-                return redirect('proceso-llantas', unidad_pk=unidad_pk)
-
-            except ChecklistInspeccion.DoesNotExist:
-                # Si el checklist no existe (por alguna razón), limpiamos la sesión
-                request.session.pop('proceso_checklist_id', None)
+            if not ChecklistInspeccion.objects.filter(pk=checklist_id_pendiente).exists():
+                 request.session.pop('proceso_checklist_id', None)
         
-        # Si no hay nada pendiente, la vista continúa de forma normal
+        # La vista continúa de forma normal
         return super().dispatch(request, *args, **kwargs)
 
-    # --- INICIO DE CÓDIGO MODIFICADO ---
     def get_queryset(self):
         """
         Filtra las unidades según el parámetro de búsqueda 'q' en la URL.
+        (Este método no necesita cambios)
         """
         queryset = super().get_queryset().order_by('nombre')
         search_query = self.request.GET.get('q')
         if search_query:
-            # Filtra por el nombre de la unidad, sin ser sensible a mayúsculas/minúsculas
             queryset = queryset.filter(nombre__icontains=search_query)
         return queryset
 
@@ -1190,25 +1179,57 @@ class SeleccionarUnidadView(IniciaProcesoRequiredMixin, ListView):
         """
         Añade el término de búsqueda al contexto y determina la URL de
         siguiente paso para cada unidad basado en el rol del usuario.
+        
+        ================================================================
+        --- SECCIÓN MODIFICADA ---
+        Ahora también revisa si hay un checklist pendiente en la sesión
+        y lo pasa a la plantilla como 'proceso_pendiente'.
+        ================================================================
         """
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('q', '')
         
+        # --- INICIO DE LA NUEVA LÓGICA "PROCESO PENDIENTE" ---
+        context['proceso_pendiente'] = None
+        checklist_id_pendiente = self.request.session.get('proceso_checklist_id')
+
+        if checklist_id_pendiente:
+            try:
+                # Buscamos el checklist pendiente en la sesión
+                checklist_pendiente = ChecklistInspeccion.objects.select_related('unidad').get(
+                    pk=checklist_id_pendiente
+                )
+                
+                # Verificamos que este checklist no haya sido completado
+                # (es decir, que no tenga un ProcesoCarga asociado)
+                # 'procesocarga' es el related_name
+                if not hasattr(checklist_pendiente, 'procesocarga'):
+                    context['proceso_pendiente'] = {
+                        'unidad_nombre': checklist_pendiente.unidad.nombre,
+                        'unidad_tipo': checklist_pendiente.unidad.get_tipo_display(),
+                        'url_continuar': reverse('proceso-llantas', kwargs={'unidad_pk': checklist_pendiente.unidad.pk})
+                    }
+                else:
+                    # Limpieza: El checklist ya se procesó pero la sesión
+                    # quedó sucia.
+                    self.request.session.pop('proceso_checklist_id', None)
+
+            except ChecklistInspeccion.DoesNotExist:
+                # Limpieza: El ID en la sesión no es válido.
+                self.request.session.pop('proceso_checklist_id', None)
+        # --- FIN DE LA NUEVA LÓGICA ---
+        
         # Determinar la URL del siguiente paso para cada unidad
         unidades_con_url = []
-        # Comprobamos el rol del usuario UNA VEZ
         user_es_encargado = es_encargado(self.request.user)
         
         for unidad in context['unidades']:
             if user_es_encargado:
-                # Los Encargados van a la nueva vista de selección de tipo de proceso
                 unidad.proceso_url = reverse('encargado-elegir-tipo-proceso', kwargs={'unidad_pk': unidad.pk})
             else:
-                # Los Técnicos (u otros roles) van directo al checklist
                 unidad.proceso_url = reverse('proceso-checklist', kwargs={'unidad_pk': unidad.pk})
             unidades_con_url.append(unidad)
         
-        # Reemplaza la lista de unidades original con la lista modificada
         context['unidades'] = unidades_con_url
         
         return context
@@ -1252,24 +1273,11 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
         return initial
 
     def get_context_data(self, **kwargs):
-        """
-        --- MÉTODO CORREGIDO ---
-        Añade lógica para deshabilitar el campo de operador si ya fue seleccionado.
-        """
         context = super().get_context_data(**kwargs)
-        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
-        context['titulo'] = f"Paso 1: Checklist para Unidad {unidad.nombre}"
-        context['unidad'] = unidad
-        form = context.get('form')
+        # Este título es opcional, pero ayuda
+        context['titulo'] = f"Iniciar Checklist: {self.get_initial().get('unidad').nombre}"
         
-        # --- LÓGICA AÑADIDA: DESHABILITAR CAMPO ---
-        # Si el operador viene pre-seleccionado (desde la sesión), 
-        # deshabilitamos el campo para que no se pueda cambiar.
-        if 'operador' in form.initial:
-            form.fields['operador'].disabled = True
-        # --- FIN LÓGICA AÑADIDA ---
-
-        # El resto de la lógica para estructurar el formulario se mantiene igual
+        form = context['form']
         field_groups = {
             'Estructura Exterior': ['cristales', 'espejos', 'logos', 'num_economico', 'puertas', 'cofre', 'parrilla', 'defensas', 'faros', 'plafoneria', 'stops', 'direccionales', 'tapiceria', 'instrumentos', 'carroceria', 'piso', 'costados', 'escape', 'pintura', 'franjas', 'loderas', 'extintor', 'senalamientos', 'estado_general'],
             'Mecánica y Motor': ['motor', 'caja', 'diferenciales', 'suspension_delantera', 'suspension_trasera', 'fugas_combustible', 'fugas_aceite', 'estado_llantas', 'presion_llantas', 'purga_tanques', 'estado_balatas', 'amortiguadores_delanteros', 'amortiguadores_traseros', 'rines_aluminio', 'mangueras_servicio', 'tarjeta_llave', 'revision_fusibles', 'revision_luces','revision_fuga_aire']
@@ -2226,124 +2234,211 @@ def download_llantas_general_excel(request):
 
 class AsignacionRevisionView(AdminRequiredMixin, CreateView):
     model = AsignacionRevision
-    form_class = AsignacionRevisionForm
+    form_class = AsignacionRevisionForm # <-- Correcto, usa el form simple
     template_name = 'asignacion_revision_form.html'
     success_url = reverse_lazy('asignar-revision')
+
+    def get_initial(self):
+        # ... (Este método se mantiene exactamente igual, está correcto) ...
+        initial = super().get_initial()
+        fecha_filtro_str = self.request.GET.get('fecha', None)
+        if fecha_filtro_str:
+            try:
+                fecha_filtro = datetime.strptime(fecha_filtro_str, '%Y-%m-%d').date()
+                initial['fecha_revision'] = fecha_filtro
+            except (ValueError, TypeError):
+                initial['fecha_revision'] = timezone.now().date()
+        else:
+            initial['fecha_revision'] = timezone.now().date()
+        return initial
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Obtener la fecha para filtrar, o usar la fecha actual como default
         fecha_filtro_str = self.request.GET.get('fecha', timezone.now().strftime('%Y-%m-%d'))
         fecha_filtro = datetime.strptime(fecha_filtro_str, '%Y-%m-%d').date()
 
-        # Obtener las asignaciones planeadas para ese día
         asignaciones_del_dia = AsignacionRevision.objects.filter(
             fecha_revision=fecha_filtro
-        ).select_related('unidad')
+        ).select_related('unidad') # 'usuario_asignado' ya no existe, así que lo quitamos
         
-        # --- INICIO DE LA LÓGICA CORREGIDA ---
-        
-        # Iterar sobre cada asignación para adjuntarle la info de fallas
+        TareaCorrectivaFormSet = inlineformset_factory(
+            AsignacionRevision, 
+            TareaCorrectiva, 
+            form=TareaCorrectivaForm, 
+            extra=1,
+            can_delete=True,
+            fk_name='asignacion'
+        )
+
+        now = timezone.now() # Lógica de "Estado Taller"
+
         for asignacion in asignaciones_del_dia:
             
-            # 1. Obtener TODAS las fallas PENDIENTES para la unidad de esta asignación
+            # Lógica del Modal Correctivo (esto ya lo tenías bien)
+            if asignacion.tipo_programacion == 'CORRECTIVO':
+                asignacion.tareas_list = asignacion.tareas_correctivas.all()
+                asignacion.correctivo_formset = TareaCorrectivaFormSet(
+                    instance=asignacion, 
+                    prefix=f'tareas-{asignacion.pk}'
+                )
+            else:
+                asignacion.tareas_list = None
+                asignacion.correctivo_formset = None
+
+            # Lógica de bad_items_list (esto ya lo tenías bien)
             fallas_pendientes = ChecklistCorreccion.objects.filter(
                 inspeccion__unidad=asignacion.unidad,
                 status='PENDIENTE'
-            ).select_related('inspeccion') # Incluimos 'inspeccion' para acceder a ella
-
-            # Crear una lista temporal para guardar los detalles de las fallas
+            ).select_related('inspeccion')
             bad_items_list = []
-            
-            # 2. Iterar sobre las fallas pendientes encontradas
             for correccion_obj in fallas_pendientes:
-                
-                # --- Lógica para obtener la foto/obs de la inspección ORIGINAL ---
+                # ... (lógica interna de 'bad_items_list') ...
                 campo_nombre = correccion_obj.nombre_campo
-                # Obtenemos la inspección original (el ChecklistInspeccion)
                 inspeccion_original = correccion_obj.inspeccion
-
-                # Obtener la etiqueta (nombre amigable) desde la inspección original
                 try:
                     label = inspeccion_original._meta.get_field(campo_nombre).verbose_name.title()
                 except Exception:
                     label = campo_nombre.replace('_', ' ').title()
-
-                # Definimos los nombres de los campos de obs y foto
                 obs_field_name = f"{campo_nombre}_obs"
                 foto_field_name = f"{campo_nombre}_foto"
-                
-                # Usamos getattr() para obtener la foto y la obs desde la INSPECCIÓN ORIGINAL
                 observacion = getattr(inspeccion_original, obs_field_name, None)
                 foto = getattr(inspeccion_original, foto_field_name, None)
-                # --- Fin de la lógica de foto/obs ---
-
-                # Añadimos la info a nuestra lista temporal
                 bad_items_list.append({
                     'id': correccion_obj.id,
                     'label': label,
                     'obs': observacion or "Sin observación.",
-                    'foto': foto, # <-- ¡Esta es la foto correcta!
+                    'foto': foto, 
                     'esta_corregido': correccion_obj.status == 'CORREGIDO', 
                     'comentario_admin': correccion_obj.comentario_admin or "",
                     'status': correccion_obj.get_status_display(),
                     'status_raw': correccion_obj.status,
                     'fecha_deteccion': inspeccion_original.fecha,
                 })
-            
-            # --- ¡ESTA ES LA LÍNEA DE CORRECCIÓN IMPORTANTE! ---
-            # Asignamos la lista que acabamos de construir de vuelta al
-            # objeto 'asignacion' para que la plantilla HTML pueda leerla.
             asignacion.bad_items_list = bad_items_list
-            # --- FIN DE LA CORRECCIÓN ---
             
-            # Obtener la fecha del último checklist (para mostrar en el modal)
+            # === INICIO DE LA SECCIÓN A CORREGIR ===
+            # Esta es la lógica de "Estado Taller" que faltaba
+            
+            asignacion.needs_full_process = True # Por defecto
+            
             latest_checklist = ChecklistInspeccion.objects.filter(
                 unidad=asignacion.unidad
             ).order_by('-fecha').first()
             
             if latest_checklist:
+                # ESTE ES EL BLOQUE INDENTADO QUE FALTABA
                 asignacion.latest_checklist_date = latest_checklist.fecha
+                
+                # Calculamos la antigüedad del checklist
+                age = now - latest_checklist.fecha
+                
+                # Si tiene 7 días o menos, permitimos "Mandar a Diesel"
+                if age.days <= 7:
+                    asignacion.needs_full_process = False
             else:
+                # No hay checklist, por lo tanto necesita proceso completo
                 asignacion.latest_checklist_date = None
-        
-        # --- FIN DE LA LÓGICA CORREGIDA ---
-        
-        # Pasamos los datos al contexto del template
+                asignacion.needs_full_process = True 
+            
+            # === FIN DE LA SECCIÓN A CORREGIR ===
+
+        # Este context['asignaciones_del_dia'] ahora está en el lugar correcto
         context['asignaciones_del_dia'] = asignaciones_del_dia
         context['fecha_filtro'] = fecha_filtro
         context['titulo'] = "Asignar Revisiones de Unidades"
         
-        # Añadir estadísticas (basado en el template 'asignacion_revision_form.html')
         stats = AsignacionRevision.objects.filter(
             fecha_revision=fecha_filtro
         ).aggregate(
-            total=models.Count('id'),
-            pendientes=models.Count('id', filter=models.Q(status='PENDIENTE')),
-            en_proceso=models.Count('id', filter=models.Q(status='EN_PROCESO')),
-            terminadas=models.Count('id', filter=models.Q(status='TERMINADO'))
+            total=Count('id'),
+            pendientes=Count('id', filter=Q(status__in=['PENDIENTE', 'PREVENTIVO', 'CORRECTIVO'])),
+            en_proceso=Count('id', filter=Q(status='EN_PROCESO')),
+            terminadas=Count('id', filter=Q(status='TERMINADO'))
         )
         context['stats'] = stats
         
         return context
 
     def form_valid(self, form):
-        # Asignar el usuario que crea la asignación (basado en el modelo AsignacionRevision)
-        # NOTA: Tu modelo 'AsignacionRevision' no tiene 'creado_por'.
-        # Si lo añadieras, aquí iría: form.instance.creado_por = self.request.user
-        messages.success(self.request, f"Unidad {form.instance.unidad} asignada correctamente para el {form.instance.fecha_revision.strftime('%d/%m/%Y')}.")
-        return super().form_valid(form)
+        # ... (este método se queda exactamente igual) ...
+        instance = form.save(commit=False)
+        
+        tipo = form.cleaned_data.get('tipo_programacion')
+        
+        if tipo == 'PROGRAMACION':
+            instance.status = 'PENDIENTE'
+        elif tipo == 'PREVENTIVO':
+            instance.status = 'PREVENTIVO'
+        elif tipo == 'CORRECTIVO':
+            instance.status = 'CORRECTIVO'
+        
+        instance.save() 
+        form.save_m2m() 
+        
+        messages.success(self.request, f"Unidad {instance.unidad} asignada correctamente para el {instance.fecha_revision.strftime('%d/%m/%Y')}.")
+        
+        fecha_filtro_str = instance.fecha_revision.strftime('%Y-%m-%d')
+        success_url_with_date = f"{self.success_url}?fecha={fecha_filtro_str}"
+        return redirect(success_url_with_date)
 
     def form_invalid(self, form):
-        # Mejorar el mensaje de error para incluir el porqué (ej. duplicado)
+        # ... (este método se queda exactamente igual) ...
         error_txt = form.errors.as_text()
         if 'unique_together' in error_txt:
-             messages.error(self.request, f"No se pudo guardar: La unidad {form.cleaned_data.get('unidad')} ya tiene una revisión asignada para esa fecha.")
+             messages.error(self.request, f"Error: La unidad {form.data.get('unidad')} ya tiene una revisión asignada para esta fecha.")
         else:
-             messages.error(self.request, f"No se pudo guardar la asignación. Errores: {error_txt}")
-        return redirect('asignar-revision')
+             messages.error(self.request, "No se pudo guardar la asignación. Por favor, corrija los errores marcados.")
+        return self.render_to_response(self.get_context_data(form=form))
+    
+@login_required
+@require_POST
+def update_asignacion_correctivo(request, pk):
+    """
+    Recibe el POST del modal de M. Correctivo para guardar
+    el FORMSET de TareasCorrectivas.
+    """
+    if not es_admin(request.user):
+        messages.error(request, "No tiene permiso para esta acción.")
+        return redirect('asignar-revision') 
 
+    asignacion = get_object_or_404(AsignacionRevision, pk=pk, tipo_programacion='CORRECTIVO')
+    
+    # 1. Definimos el FormSet igual que en la vista GET
+    TareaCorrectivaFormSet = inlineformset_factory(
+        AsignacionRevision, 
+        TareaCorrectiva, 
+        form=TareaCorrectivaForm, 
+        extra=1, 
+        can_delete=True, 
+        fk_name='asignacion'
+    )
+    
+    # 2. Instanciamos el FormSet con los datos del POST
+    formset = TareaCorrectivaFormSet(
+        request.POST, 
+        instance=asignacion, 
+        prefix=f'tareas-{pk}'
+    )
+
+    if formset.is_valid():
+        formset.save()
+        messages.success(request, f"Tareas correctivas para {asignacion.unidad.nombre} guardadas.")
+    else:
+        # 3. Manejo de errores
+        error_list = []
+        for form_errors in formset.errors:
+            for field, errors in form_errors.items():
+                error_list.append(f"{field}: {errors[0]}")
+        
+        # Errores no ligados al formulario (ej. validación del formset)
+        for error in formset.non_form_errors():
+            error_list.append(error)
+
+        messages.error(request, f"Error al guardar tareas: {'. '.join(error_list)}")
+
+    # Redirige de vuelta al monitor del día de la asignación
+    return redirect(f"{reverse('asignar-revision')}?fecha={asignacion.fecha_revision.strftime('%Y-%m-%d')}")
 @require_POST # Asegura que esta vista solo acepte peticiones POST
 @login_required
 def cancelar_revision(request, pk):

@@ -421,19 +421,40 @@ class AsignacionRevision(models.Model):
     """
     Modela la asignación de una unidad para revisión en una fecha específica.
     """
-    STATUS_CHOICES = [
-        ('PENDIENTE', 'Pendiente'),
-        ('EN_PROCESO', 'En Proceso'),  # <--- AÑADIR ESTA LÍNEA
-        ('TERMINADO', 'Terminado'),
-        ('CANCELADO', 'Cancelado'),
-        ('NO_VINO', 'No Vino'),
+    
+    TIPO_PROGRAMACION_CHOICES = [
+        ('PROGRAMACION', 'Programación Normal'),
+        ('PREVENTIVO', 'Mantenimiento Preventivo'),
+        ('CORRECTIVO', 'Mantenimiento Correctivo'),
     ]
+    tipo_programacion = models.CharField(
+        max_length=12, 
+        choices=TIPO_PROGRAMACION_CHOICES, 
+        default='PROGRAMACION',
+        verbose_name="Tipo de Programación"
+    )
 
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, verbose_name="Unidad Asignada")
     fecha_revision = models.DateField(verbose_name="Fecha de Revisión")
     
+    STATUS_CHOICES = [
+        ('PENDIENTE', 'Pendiente (Normal)'),
+        ('EN_PROCESO', 'En Proceso'),
+        ('TERMINADO', 'Terminado'),
+        ('CANCELADO', 'Cancelado'),
+        ('NO_VINO', 'No Vino'),
+        ('PREVENTIVO', 'Pendiente (Preventivo)'), 
+        ('CORRECTIVO', 'Pendiente (Correctivo)'), 
+    ]
+
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDIENTE', verbose_name="Estado")
     comentario_cancelacion = models.TextField(blank=True, null=True, verbose_name="Motivo de Cancelación")
+    
+    # --- INICIO DE LA MODIFICACIÓN ---
+    # ¡Eliminamos estos dos campos!
+    # refaccion = models.TextField(...)
+    # usuario_asignado = models.ForeignKey(...)
+    # --- FIN DE LA MODIFICACIÓN ---
     
     class Meta:
         verbose_name = "Asignación de Revisión"
@@ -446,9 +467,7 @@ class AsignacionRevision(models.Model):
 
     @property
     def proceso_del_dia(self):
-        """
-        Busca y devuelve el ProcesoCarga asociado a esta asignación por unidad y fecha.
-        """
+        # ... (este método se queda igual) ...
         return ProcesoCarga.objects.filter(
             unidad=self.unidad,
             fecha_inicio__date=self.fecha_revision
@@ -605,3 +624,56 @@ class EntregaSuministros(models.Model):
 
     def get_absolute_url(self):
         return reverse('entrega-suministros-update', kwargs={'pk': self.pk})
+    
+class TareaCorrectiva(models.Model):
+    """
+    Almacena una tarea de mantenimiento correctivo específica, ligada a
+    una AsignacionRevision.
+    """
+    STATUS_TAREA_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('COMPLETADA', 'Completada'),
+    ]
+
+    # Relación "Muchos a Uno" con la asignación
+    asignacion = models.ForeignKey(
+        AsignacionRevision, 
+        on_delete=models.CASCADE, 
+        related_name='tareas_correctivas'
+    )
+    
+    # Los campos que movimos
+    refaccion = models.TextField(
+        verbose_name="Refacción o Tarea Requerida"
+    )
+    usuario_asignado = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True, 
+        related_name='tareas_correctivas_asignadas', 
+        verbose_name="Usuario Asignado"
+    )
+    
+    # El nuevo campo de fecha que pediste
+    fecha_limite = models.DateField(
+        null=True, blank=True,
+        verbose_name="Fecha Límite"
+    )
+    
+    status = models.CharField(
+        max_length=10, 
+        choices=STATUS_TAREA_CHOICES, 
+        default='PENDIENTE', 
+        verbose_name="Estado de la Tarea"
+    )
+    
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_completada = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['fecha_creacion']
+        verbose_name = "Tarea Correctiva"
+        verbose_name_plural = "Tareas Correctivas"
+
+    def __str__(self):
+        return f"Tarea: {self.refaccion[:50]}... ({self.get_status_display()})"

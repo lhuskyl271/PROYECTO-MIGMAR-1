@@ -3,7 +3,7 @@
 from django import forms
 from .models import (
     Unidad, Operador, CargaDiesel, CargaAceite, CargaUrea, CompraSuministro, 
-    ChecklistInspeccion, LlantasInspeccion, LlantaDetalle, AjusteInventario, AsignacionRevision,EntregaSuministros# <-- Añadir AjusteInventario
+    ChecklistInspeccion, LlantasInspeccion, LlantaDetalle, AjusteInventario, AsignacionRevision,EntregaSuministros, TareaCorrectiva# <-- Añadir AjusteInventario
 )
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -481,18 +481,49 @@ class AjusteInventarioForm(forms.ModelForm):
         }
         
 class AsignacionRevisionForm(forms.ModelForm):
-    
-    # *** ELIMINAR EL MÉTODO __init__ COMPLETO ***
-    # (Ya que solo se usaba para filtrar tecnicos_asignado)
+    """
+    Formulario para la creación inicial de una asignación.
+    Ya no maneja los detalles de M. Correctivo (refacción, usuario).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # 1. El campo de fecha sigue siendo de solo lectura
+        #    Se poblará desde la vista (get_initial)
+        self.fields['fecha_revision'].widget.attrs['readonly'] = True 
+
+        # 2. La lógica para 'usuario_asignado' y 'refaccion' se ha eliminado.
+
+    # 3. El método 'clean' que validaba 'CORRECTIVO' se ha eliminado.
 
     class Meta:
         model = AsignacionRevision
-        # *** CAMBIO: REMOVER 'tecnico_asignado' DE fields ***
-        fields = ['unidad', 'fecha_revision', 'comentario_cancelacion'] 
+        
+        # --- 'fields' MODIFICADOS ---
+        # Solo se piden los campos para la creación inicial.
+        fields = [
+            'tipo_programacion', 
+            'unidad', 
+            'fecha_revision', 
+            'comentario_cancelacion' # Este campo se usa en el modal de cancelar
+        ] 
+        # --- FIN 'fields' ---
+        
         widgets = {
+            'tipo_programacion': forms.Select(attrs={'class': 'form-select'}), 
             'unidad': forms.Select(attrs={'class': 'form-select'}),
-            'fecha_revision': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            # ELIMINAR WIDGET DE tecnico_asignado
+            
+            # --- INICIO DE LA CORRECCIÓN ---
+            'fecha_revision': forms.DateInput(
+                format='%Y-%m-%d', # <-- ESTA LÍNEA ES LA SOLUCIÓN
+                attrs={
+                    'type': 'date', 
+                    'class': 'form-control'
+                }
+            ),
+            # --- FIN DE LA CORRECCIÓN ---
+            
             'comentario_cancelacion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
         
@@ -595,3 +626,40 @@ class OperadorSelectionForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'}),
         required=True
     )
+    
+class TareaCorrectivaForm(forms.ModelForm):
+    """
+    Formulario para una TareaCorrectiva individual, usado en el formset.
+    """
+    class Meta:
+        model = TareaCorrectiva
+        fields = ['refaccion', 'usuario_asignado', 'fecha_limite', 'status']
+        widgets = {
+            'refaccion': forms.Textarea(attrs={
+                'class': 'form-control', 
+                'rows': 2, 
+                'style': 'text-transform:uppercase;',
+                'placeholder': 'Descripción de la refacción o tarea'
+            }),
+            'usuario_asignado': forms.Select(attrs={'class': 'form-select'}),
+            'fecha_limite': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={
+                    'type': 'date', 
+                    'class': 'form-control'
+                }
+            ),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filtramos el queryset de usuarios igual que antes
+        self.fields['usuario_asignado'].queryset = User.objects.filter(
+            Q(is_staff=True) | Q(groups__name__in=['Administrador', 'Tecnico'])
+        ).distinct().order_by('username')
+        
+        # Hacemos los campos obligatorios
+        self.fields['refaccion'].required = True
+        self.fields['usuario_asignado'].required = True

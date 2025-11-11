@@ -127,4 +127,5 @@ urlpatterns = [
     path('entregas/<int:pk>/eliminar/', EntregaSuministrosDeleteView.as_view(), name='entrega-suministros-delete'),
     path('api/search/operadores/', search_operadores_api, name='operador-search-api'),
     path('proceso/elegir-tipo/<int:unidad_pk>/', EncargadoElegirTipoProcesoView.as_view(), name='encargado-elegir-tipo-proceso'),
+    path('revisiones/correctivo/update/<int:pk>/', update_asignacion_correctivo, name='update-correctivo-details'),
 ]

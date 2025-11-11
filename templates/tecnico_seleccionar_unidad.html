@@ -9,7 +9,33 @@
             <p class="text-muted mb-0">Elige una unidad para iniciar el proceso de inspección y carga.</p>
         </div>
         <div class="card-body">
+
+            {% if proceso_pendiente %}
+            <div class="alert alert-warning border-left-warning shadow mb-4" role="alert">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-3x"></i>
+                    </div>
+                    <div class="col">
+                        <h5 class="alert-heading font-weight-bold">¡Proceso Pendiente!</h5>
+                        <p classa="mb-2">
+                            Tiene una inspección de llantas pendiente para la unidad <strong>{{ proceso_pendiente.unidad_nombre }}</strong>.
+                        </p>
+                        <p class="mb-0">Por favor, complete este paso para finalizar el proceso.</p>
+                        <a href="{{ proceso_pendiente.url_continuar }}" class="btn btn-warning btn-icon-split mt-2">
+                            <span class="icon text-white-50">
+                                <i class="fas fa-arrow-right"></i>
+                            </span>
+                            <span class="text">Continuar con Inspección de Llantas</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-4">
+            <h6 class="text-center text-muted mb-3">O inicie un nuevo proceso:</h6>
             
+            {% endif %}
             <div class="mb-4">
                 <form method="get" action="" class="d-flex" role="search">
                     <input type="text" name="q" class="form-control" placeholder="Buscar unidad por nombre..." value="{{ search_query|default:'' }}" aria-label="Buscar unidad">
