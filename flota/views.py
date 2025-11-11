@@ -1274,8 +1274,17 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Este título es opcional, pero ayuda
-        context['titulo'] = f"Iniciar Checklist: {self.get_initial().get('unidad').nombre}"
+        
+        # ===================== INICIO DE LA CORRECCIÓN =====================
+        #
+        # Necesitamos obtener la 'unidad' aquí y pasarla al contexto.
+        # La plantilla 'checklist_form.html' la necesita para mostrar
+        # condicionalmente el campo 'foto_thermo_hrs'.
+        #
+        unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
+        context['unidad'] = unidad
+        context['titulo'] = f"Iniciar Checklist: {unidad.nombre}"
+        # ====================== FIN DE LA CORRECCIÓN =====================
         
         form = context['form']
         field_groups = {
