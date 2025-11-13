@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2 mb-0">{{ titulo }}</h1>
+        <a href="{% url 'almacen:proveedor-crear' %}" class="btn btn-primary shadow-sm">
+            <i class="fas fa-plus-circle me-1"></i> Registrar Proveedor
+        </a>
+    </div>
+
+    <div class="card shadow-lg border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Nombre</th>
+                            <th scope="col">Teléfono</th>
+                            <th scope="col">Email</th>
+                            <th scope="col" class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for proveedor in proveedores %}
+                        <tr>
+                            <td class="fw-bold">{{ proveedor.nombre }}</td>
+                            <td>{{ proveedor.telefono|default:"N/A" }}</td>
+                            <td>{{ proveedor.email|default:"N/A" }}</td>
+                            <td class="text-center">
+                                <a href="{% url 'almacen:proveedor-editar' proveedor.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                No hay proveedores registrados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    </div>
+{% endblock %}

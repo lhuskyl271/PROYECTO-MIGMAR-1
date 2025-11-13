@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth.models import User, Group # ¡Añade Group!
+from django.contrib.contenttypes.fields import GenericRelation
 
 # ===================================================================
 # 1. MODELOS PRINCIPALES (SIN DEPENDENCIAS)
@@ -644,8 +645,19 @@ class TareaCorrectiva(models.Model):
     
     # Los campos que movimos
     refaccion = models.TextField(
-        verbose_name="Refacción o Tarea Requerida"
+        verbose_name="Descripción de la Tarea" # <-- MODIFICADO
     )
+    
+    # --- INICIO DE CAMPO AÑADIDO ---
+    piezas = GenericRelation( # <--- SIN el prefijo 'models.'
+        'almacen.SalidaArticulo', 
+        content_type_field='content_type',
+        object_id_field='object_id',
+        related_query_name='tarea_correctiva'
+    
+    )
+    # --- FIN DE CAMPO AÑADIDO ---
+
     usuario_asignado = models.ForeignKey(
         User, 
         on_delete=models.SET_NULL, 

@@ -426,6 +426,21 @@
                                 </li>
 
                                 <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle {% if 'almacen/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-warehouse me-1"></i> Almacén
+                                    </a>
+                                    <ul class="dropdown-menu">
+                                        <li><h6 class="dropdown-header">Inventario</h6></li>
+                                        <li><a class="dropdown-item" href="{% url 'almacen:dashboard' %}"><i class="fas fa-boxes"></i> Ver Inventario</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'almacen:entrada-crear' %}"><i class="fas fa-cart-plus"></i> Registrar Compra</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Catálogos</h6></li>
+                                        <li><a class="dropdown-item" href="{% url 'almacen:articulo-crear' %}"><i class="fas fa-plus"></i> Crear Artículo</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'almacen:gestion-categorias' %}"><i class="fas fa-tags"></i> Gestionar Categorías</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'almacen:proveedor-list' %}"><i class="fas fa-truck-loading"></i> Gestionar Proveedores</a></li>
+                                    </ul>
+                                </li>
+                                <li class="nav-item dropdown">
                                     <a class="nav-link dropdown-toggle {% if 'mantenimiento/admin' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="fas fa-wrench me-1"></i> Mantenimiento
                                     </a>
@@ -512,7 +527,7 @@
                     {% for message in messages %}
                         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
                             {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            <button typebutton" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     {% endfor %}
                 </div>

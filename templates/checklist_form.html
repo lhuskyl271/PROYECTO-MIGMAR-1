@@ -18,7 +18,7 @@
 </div>
 
 <div class="container-fluid py-4">
-    <form method="post" novalidate enctype="multipart/form-data" id="checklistForm">
+    <form method="post" enctype="multipart/form-data" id="checklistForm">
         {% csrf_token %}
 
         {{ form.unidad }}

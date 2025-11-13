@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'flota', # Nuestra app
     'django.contrib.humanize',
     'widget_tweaks',
+    'almacen',
     'storages', # <--- AÑADIDO: Para la integración con S3
     'mantenimiento', # App de mantenimiento
     'crispy_forms',

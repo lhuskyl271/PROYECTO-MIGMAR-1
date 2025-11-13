@@ -128,4 +128,5 @@ urlpatterns = [
     path('api/search/operadores/', search_operadores_api, name='operador-search-api'),
     path('proceso/elegir-tipo/<int:unidad_pk>/', EncargadoElegirTipoProcesoView.as_view(), name='encargado-elegir-tipo-proceso'),
     path('revisiones/correctivo/update/<int:pk>/', update_asignacion_correctivo, name='update-correctivo-details'),
+    path('tareas/<int:tarea_pk>/add-pieza/', add_pieza_a_tarea, name='add-pieza-a-tarea'),
 ]

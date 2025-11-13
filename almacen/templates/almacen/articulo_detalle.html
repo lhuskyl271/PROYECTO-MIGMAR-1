@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load humanize %} 
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-lg border-0 sticky-top" style="top: 100px;">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h4 class="mb-0 fw-bold">Detalle del Artículo</h4>
+                </div>
+                
+                {% if articulo.foto %}
+                    <img src="{{ articulo.foto.url }}" class="card-img-top" alt="{{ articulo.nombre }}" style="max-height: 300px; object-fit: cover;">
+                {% else %}
+                    <div class="card-body text-center bg-light p-5">
+                        <i class="fas fa-image fa-5x text-muted"></i>
+                        <p class="text-muted mt-2">Sin foto</p>
+                    </div>
+                {% endif %}
+                
+                <div class="card-body">
+                    <h2 class="card-title fw-bolder">{{ articulo.nombre }}</h2>
+                    
+                    <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded-3 mb-3">
+                        <span class="fw-semibold text-dark">Stock Disponible:</span>
+                        <span class="h2 fw-bolder text-primary mb-0">{{ articulo.stock_total|intcomma }}</span>
+                    </div>
+                    
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between px-0">
+                            <strong>Categoría:</strong>
+                            <span>{{ articulo.subcategoria.categoria.nombre }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between px-0">
+                            <strong>Sub-Categoría:</strong>
+                            <span>{{ articulo.subcategoria.nombre }}</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card-footer bg-light p-3">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'almacen:entrada-crear-especifico' articulo_pk=articulo.pk %}" class="btn btn-success shadow-sm">
+                            <i class="fas fa-cart-plus me-1"></i> Registrar Compra (Añadir Stock)
+                        </a>
+                        <a href="{% url 'almacen:articulo-editar' pk=articulo.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-edit me-1"></i> Editar Ficha Técnica
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-gradient-info text-white">
+                    <h4 class="mb-0 fw-bold"><i class="fas fa-history me-2"></i> Historial de Compras (Entradas)</h4>
+                </div>
+                
+                <div class="card-body p-3 bg-light border-bottom">
+                    <form method="get" class="mb-0">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md">
+                                <label for="filtro_proveedor" class="form-label small fw-semibold mb-0">Filtrar por Proveedor:</label>
+                                <select name="proveedor" id="filtro_proveedor" class="form-select form-select-sm">
+                                    <option value="">Todos los Proveedores</option>
+                                    {% for p in filtro_proveedores_opciones %}
+                                    <option value="{{ p.pk }}" {% if filtro_actual_proveedor == p.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ p.nombre }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md">
+                                <label for="filtro_tipo" class="form-label small fw-semibold mb-0">Filtrar por Tipo:</label>
+                                <select name="tipo" id="filtro_tipo" class="form-select form-select-sm">
+                                    <option value="">Todos los Tipos</option>
+                                    {% for value, display in filtro_tipo_opciones %}
+                                    <option value="{{ value }}" {% if filtro_actual_tipo == value %}selected{% endif %}>
+                                        {{ display }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-auto d-flex align-items-end pt-3 pt-md-0">
+                                <button type="submit" class="btn btn-info btn-sm px-3 me-2 shadow-sm">
+                                    <i class="fas fa-filter me-1"></i> Filtrar
+                                </button>
+                                <a href="{% url 'almacen:articulo-detalle' pk=articulo.pk %}" class="btn btn-outline-secondary btn-sm px-3" title="Limpiar filtros">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">Fecha Compra</th>
+                                    <th>Proveedor</th>
+                                    <th class="text-center">Cantidad</th>
+                                    <th>Precio Unitario</th>
+                                    <th>Tipo de Entrada</th>
+                                    <th class="text-center">Acciones</th> </tr>
+                            </thead>
+                            <tbody>
+                                {% for entrada in historial_entradas %}
+                                <tr>
+                                    <td class="ps-4">{{ entrada.fecha_compra|date:"d M Y" }}</td>
+                                    <td>
+                                        {{ entrada.proveedor.nombre|default:"N/A" }}
+                                        {% if entrada.numero_proveedor %}
+                                            <br><small class_="text-muted">SKU: {{ entrada.numero_proveedor }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary rounded-pill fs-6">{{ entrada.cantidad|intcomma }}</span>
+                                    </td>
+                                    <td>$ {{ entrada.precio_compra|floatformat:2|intcomma }}</td>
+                                    <td>{{ entrada.get_tipo_display }}</td>
+                                    
+                                    <td class="text-center">
+                                        <a href="{% url 'almacen:entrada-editar' pk=entrada.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar Compra">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{% url 'almacen:entrada-eliminar' pk=entrada.pk %}" class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar Compra">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
+                                    </td>
+                                    </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted p-5"> <i class="fas fa-box-open fa-3x mb-3"></i>
+                                        <h5>No hay historial de entradas para este artículo.</h5>
+                                        {% if filtro_actual_proveedor or filtro_actual_tipo %}
+                                            <p class="mb-0">Prueba modificando o limpiando los filtros.</p>
+                                        {% else %}
+                                            <p class="mb-0">Registra una nueva compra para comenzar.</p>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

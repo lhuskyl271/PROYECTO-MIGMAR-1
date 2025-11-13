@@ -53,6 +53,16 @@ from .forms import OperadorSelectionForm # El nuevo formulario
 from .forms import AsignacionRevisionForm # <-- Importante
 # ===================================================
 
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from .models import TareaCorrectiva 
+# Asegúrate de que esta ruta de importación sea correcta
+from almacen.models import Articulo, SalidaArticulo 
+from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import PermissionDenied, FieldDoesNotExist # <-- Añade FieldDoesNotExist
+
 
 # ==============================================================================
 # === NUEVAS FUNCIONES AUXILIARES PARA GESTIONAR ARCHIVOS EN S3 MANUALMENTE ===
@@ -2242,162 +2252,178 @@ def download_llantas_general_excel(request):
     return response
 
 class AsignacionRevisionView(AdminRequiredMixin, CreateView):
+    """
+    Vista principal para crear asignaciones y ver la lista del día.
+    (MODIFICADA CON LA NUEVA LÓGICA DE ANTIGÜEDAD DE CHECKLIST)
+    """
     model = AsignacionRevision
-    form_class = AsignacionRevisionForm # <-- Correcto, usa el form simple
-    template_name = 'asignacion_revision_form.html'
-    success_url = reverse_lazy('asignar-revision')
+    form_class = AsignacionRevisionForm
+    template_name = 'asignacion_revision_form.html' # Tu plantilla
+    
+    def get_success_url(self):
+        # Vuelve a la misma vista, pero con la fecha de la revisión creada
+        fecha_revision = self.object.fecha_revision.strftime('%Y-%m-%d')
+        messages.success(self.request, "¡Asignación creada exitosamente!")
+        return f"{reverse('asignar-revision')}?fecha={fecha_revision}"
 
     def get_initial(self):
-        # ... (Este método se mantiene exactamente igual, está correcto) ...
-        initial = super().get_initial()
-        fecha_filtro_str = self.request.GET.get('fecha', None)
+        # Pre-selecciona la fecha del filtro en el formulario
+        fecha_filtro_str = self.request.GET.get('fecha')
         if fecha_filtro_str:
-            try:
-                fecha_filtro = datetime.strptime(fecha_filtro_str, '%Y-%m-%d').date()
-                initial['fecha_revision'] = fecha_filtro
-            except (ValueError, TypeError):
-                initial['fecha_revision'] = timezone.now().date()
-        else:
-            initial['fecha_revision'] = timezone.now().date()
-        return initial
+            return {'fecha_revision': fecha_filtro_str}
+        return {'fecha_revision': timezone.now().date()}
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        fecha_filtro_str = self.request.GET.get('fecha', timezone.now().strftime('%Y-%m-%d'))
-        fecha_filtro = datetime.strptime(fecha_filtro_str, '%Y-%m-%d').date()
+        # 1. Lógica de Filtro de Fecha (basado en tu HTML)
+        fecha_filtro_str = self.request.GET.get('fecha')
+        if fecha_filtro_str:
+            try:
+                fecha_filtro = timezone.datetime.strptime(fecha_filtro_str, '%Y-%m-%d').date()
+            except ValueError:
+                fecha_filtro = timezone.now().date()
+        else:
+            fecha_filtro = timezone.now().date()
+        
+        context['fecha_filtro'] = fecha_filtro
 
+        # 2. Obtener Asignaciones del Día (basado en tu HTML)
         asignaciones_del_dia = AsignacionRevision.objects.filter(
             fecha_revision=fecha_filtro
-        ).select_related('unidad') # 'usuario_asignado' ya no existe, así que lo quitamos
+        ).select_related('unidad').prefetch_related(
+            # Nombres correctos: 'checklistinspeccion_set' y 'correcciones'
+            'unidad__checklistinspeccion_set__correcciones__corregido_por' # <--- LÍNEA CORREGIDA
+        ).order_by('unidad__nombre')
         
+        # 3. Preparar Formsets y Datos Adicionales (MODIFICADO)
         TareaCorrectivaFormSet = inlineformset_factory(
-            AsignacionRevision, 
-            TareaCorrectiva, 
-            form=TareaCorrectivaForm, 
-            extra=1,
+            AsignacionRevision,
+            TareaCorrectiva,
+            form=TareaCorrectivaForm,
+            extra=1, # Empieza con 1 formulario vacío
             can_delete=True,
-            fk_name='asignacion'
+            fields=['refaccion', 'usuario_asignado', 'fecha_limite', 'status']
         )
-
-        now = timezone.now() # Lógica de "Estado Taller"
+        
+        # --- Obtener la fecha actual UNA SOLA VEZ fuera del bucle ---
+        today = timezone.now().date()
 
         for asignacion in asignaciones_del_dia:
-            
-            # Lógica del Modal Correctivo (esto ya lo tenías bien)
+            # Lógica de Mantenimiento Correctivo (MODIFICADO)
             if asignacion.tipo_programacion == 'CORRECTIVO':
-                asignacion.tareas_list = asignacion.tareas_correctivas.all()
+                # ¡MODIFICACIÓN! Usamos .prefetch_related() para optimizar
+                # y traer las piezas (SalidaArticulo) y sus artículos.
+                asignacion.tareas_list = asignacion.tareas_correctivas.prefetch_related(
+                    'usuario_asignado',
+                    'piezas__articulo' # Precarga las piezas y sus artículos
+                ).all()
+                
                 asignacion.correctivo_formset = TareaCorrectivaFormSet(
                     instance=asignacion, 
                     prefix=f'tareas-{asignacion.pk}'
                 )
-            else:
-                asignacion.tareas_list = None
-                asignacion.correctivo_formset = None
-
-            # Lógica de bad_items_list (esto ya lo tenías bien)
-            fallas_pendientes = ChecklistCorreccion.objects.filter(
-                inspeccion__unidad=asignacion.unidad,
-                status='PENDIENTE'
-            ).select_related('inspeccion')
-            bad_items_list = []
-            for correccion_obj in fallas_pendientes:
-                # ... (lógica interna de 'bad_items_list') ...
-                campo_nombre = correccion_obj.nombre_campo
-                inspeccion_original = correccion_obj.inspeccion
-                try:
-                    label = inspeccion_original._meta.get_field(campo_nombre).verbose_name.title()
-                except Exception:
-                    label = campo_nombre.replace('_', ' ').title()
-                obs_field_name = f"{campo_nombre}_obs"
-                foto_field_name = f"{campo_nombre}_foto"
-                observacion = getattr(inspeccion_original, obs_field_name, None)
-                foto = getattr(inspeccion_original, foto_field_name, None)
-                bad_items_list.append({
-                    'id': correccion_obj.id,
-                    'label': label,
-                    'obs': observacion or "Sin observación.",
-                    'foto': foto, 
-                    'esta_corregido': correccion_obj.status == 'CORREGIDO', 
-                    'comentario_admin': correccion_obj.comentario_admin or "",
-                    'status': correccion_obj.get_status_display(),
-                    'status_raw': correccion_obj.status,
-                    'fecha_deteccion': inspeccion_original.fecha,
-                })
-            asignacion.bad_items_list = bad_items_list
             
-            # === INICIO DE LA SECCIÓN A CORREGIR ===
-            # Esta es la lógica de "Estado Taller" que faltaba
-            
-            asignacion.needs_full_process = True # Por defecto
-            
-            latest_checklist = ChecklistInspeccion.objects.filter(
-                unidad=asignacion.unidad
-            ).order_by('-fecha').first()
-            
-            if latest_checklist:
-                # ESTE ES EL BLOQUE INDENTADO QUE FALTABA
+            # Lógica de Fallas (basado en tu HTML)
+            try:
+                # 1. Usamos el nombre correcto: 'checklistinspeccion_set' y 'fecha'
+                latest_checklist = asignacion.unidad.checklistinspeccion_set.latest('fecha')
                 asignacion.latest_checklist_date = latest_checklist.fecha
                 
-                # Calculamos la antigüedad del checklist
-                age = now - latest_checklist.fecha
-                
-                # Si tiene 7 días o menos, permitimos "Mandar a Diesel"
-                if age.days <= 7:
-                    asignacion.needs_full_process = False
-            else:
-                # No hay checklist, por lo tanto necesita proceso completo
-                asignacion.latest_checklist_date = None
-                asignacion.needs_full_process = True 
-            
-            # === FIN DE LA SECCIÓN A CORREGIR ===
+                # 2. Usamos la relación correcta 'correcciones' y filtramos por 'PENDIENTE'
+                correccion_items = latest_checklist.correcciones.filter(
+                    status='PENDIENTE'
+                ).select_related('corregido_por')
 
-        # Este context['asignaciones_del_dia'] ahora está en el lugar correcto
+                # 3. Construimos la lista que el template espera
+                bad_items_list_temp = []
+                for item in correccion_items:
+                    # Obtenemos la etiqueta legible del campo (ej. "Cristales")
+                    try:
+                        label = item.inspeccion._meta.get_field(item.nombre_campo).verbose_name.title()
+                    except FieldDoesNotExist:
+                        label = item.nombre_campo.replace('_', ' ').title()
+                    
+                    # Añadimos los campos que el template HTML necesita
+                    bad_items_list_temp.append({
+                        'id': item.id,
+                        'label': label,
+                        'obs': item.observacion_original,
+                        'foto': item.foto_evidencia, # El template usa 'item.foto'
+                        'status_raw': item.status,
+                        'status': item.get_status_display(),
+                        'comentario_admin': item.comentario_admin,
+                        'fecha_correccion': item.fecha_correccion,
+                        'corregido_por': item.corregido_por,
+                    })
+                asignacion.bad_items_list = bad_items_list_temp
+
+            except ChecklistInspeccion.DoesNotExist: # <-- Usamos el modelo correcto
+                asignacion.latest_checklist_date = None
+                asignacion.bad_items_list = []
+            except Exception as e:
+                # Captura de error general para depuración
+                print(f"Error procesando fallas para asignacion {asignacion.pk}: {e}")
+                asignacion.latest_checklist_date = None
+                asignacion.bad_items_list = []
+            
+            
+            # --- INICIO DE LÓGICA MODIFICADA (TU REQUERIMIENTO) ---
+            
+            # Regla 1: Siempre es proceso completo si es correctivo, preventivo, o tiene fallas.
+            if asignacion.bad_items_list or asignacion.tipo_programacion == 'CORRECTIVO' or asignacion.tipo_programacion == 'PREVENTIVO':
+                asignacion.needs_full_process = True
+            else:
+                # Regla 2: Si es 'Normal', checar la antigüedad del checklist.
+                if asignacion.latest_checklist_date is None:
+                    # Si NUNCA ha tenido un checklist, es proceso completo.
+                    asignacion.needs_full_process = True
+                else:
+                    # Calcular días desde el último checklist
+                    dias_desde_ultimo_check = (today - asignacion.latest_checklist_date.date()).days
+                    
+                    if dias_desde_ultimo_check >= 8:
+                        # Si tiene 8 o más días, es proceso completo.
+                        asignacion.needs_full_process = True
+                    else:
+                        # Si tiene 7 o menos días (incluyendo 0), solo va a diésel.
+                        asignacion.needs_full_process = False
+            
+            # --- FIN DE LÓGICA MODIFICADA ---
+
         context['asignaciones_del_dia'] = asignaciones_del_dia
-        context['fecha_filtro'] = fecha_filtro
+        
+        # --- ¡NUEVA LÍNEA CRÍTICA! ---
+        # Pasamos la lista de artículos del inventario al contexto
+        # para usarla en el dropdown del modal.
+        context['lista_articulos_inventario'] = Articulo.objects.filter(
+            stock_total__gt=0
+        ).order_by(
+            'subcategoria__categoria__nombre', 'subcategoria__nombre', 'nombre'
+        )
+        # --- FIN NUEVA LÍNEA ---
+        
         context['titulo'] = "Asignar Revisiones de Unidades"
         
-        stats = AsignacionRevision.objects.filter(
-            fecha_revision=fecha_filtro
-        ).aggregate(
+        # 4. Lógica de Estadísticas (basado en tu HTML)
+        stats_qs = AsignacionRevision.objects.filter(fecha_revision=fecha_filtro)
+        context['stats'] = stats_qs.aggregate(
             total=Count('id'),
             pendientes=Count('id', filter=Q(status__in=['PENDIENTE', 'PREVENTIVO', 'CORRECTIVO'])),
             en_proceso=Count('id', filter=Q(status='EN_PROCESO')),
             terminadas=Count('id', filter=Q(status='TERMINADO'))
         )
-        context['stats'] = stats
         
         return context
 
     def form_valid(self, form):
-        # ... (este método se queda exactamente igual) ...
-        instance = form.save(commit=False)
-        
-        tipo = form.cleaned_data.get('tipo_programacion')
-        
-        if tipo == 'PROGRAMACION':
-            instance.status = 'PENDIENTE'
-        elif tipo == 'PREVENTIVO':
-            instance.status = 'PREVENTIVO'
-        elif tipo == 'CORRECTIVO':
-            instance.status = 'CORRECTIVO'
-        
-        instance.save() 
-        form.save_m2m() 
-        
-        messages.success(self.request, f"Unidad {instance.unidad} asignada correctamente para el {instance.fecha_revision.strftime('%d/%m/%Y')}.")
-        
-        fecha_filtro_str = instance.fecha_revision.strftime('%Y-%m-%d')
-        success_url_with_date = f"{self.success_url}?fecha={fecha_filtro_str}"
-        return redirect(success_url_with_date)
+        # Lógica para guardar el formulario de creación
+        messages.success(self.request, "¡Asignación creada exitosamente!")
+        return super().form_valid(form)
 
     def form_invalid(self, form):
-        # ... (este método se queda exactamente igual) ...
-        error_txt = form.errors.as_text()
-        if 'unique_together' in error_txt:
-             messages.error(self.request, f"Error: La unidad {form.data.get('unidad')} ya tiene una revisión asignada para esta fecha.")
-        else:
-             messages.error(self.request, "No se pudo guardar la asignación. Por favor, corrija los errores marcados.")
+        messages.error(self.request, "Error al crear la asignación. Revisa los campos.")
+        # Re-renderiza la página con los datos y el formulario inválido
         return self.render_to_response(self.get_context_data(form=form))
     
 @login_required
@@ -3486,3 +3512,57 @@ class EncargadoElegirTipoProcesoView(EncargadoRequiredMixin, FormView):
         except Exception as e:
             messages.error(self.request, f"Error al crear el proceso 'Solo Carga': {e}")
             return redirect('encargado-elegir-tipo-proceso', unidad_pk=unidad.pk)
+        
+@login_required
+@require_POST # Esta vista solo acepta datos por POST
+def add_pieza_a_tarea(request, tarea_pk):
+    """
+    Vista para añadir una Pieza (SalidaArticulo) a una TareaCorrectiva.
+    Contiene la lógica de validación de stock.
+    """
+    # Asumiendo que tienes una función/mixin para chequear admin
+    # if not request.user.is_staff: 
+    #     messages.error(request, "No tiene permiso para esta acción.")
+    #     return redirect('asignar-revision')
+
+    tarea = get_object_or_404(TareaCorrectiva, pk=tarea_pk)
+    
+    # URL de redirección en caso de éxito o error
+    redirect_url = f"{reverse('asignar-revision')}?fecha={tarea.asignacion.fecha_revision.strftime('%Y-%m-%d')}"
+
+    try:
+        articulo_id = int(request.POST.get('articulo'))
+        cantidad = int(request.POST.get('cantidad'))
+    except (TypeError, ValueError, AttributeError):
+        messages.error(request, "Datos inválidos. El artículo o la cantidad no son correctos.")
+        return redirect(redirect_url)
+
+    if cantidad <= 0:
+        messages.error(request, "La cantidad debe ser mayor a cero.")
+        return redirect(redirect_url)
+
+    try:
+        articulo = Articulo.objects.get(pk=articulo_id)
+    except Articulo.DoesNotExist:
+        messages.error(request, "El artículo seleccionado no existe.")
+        return redirect(redirect_url)
+
+    # --- ¡LÓGICA DE VALIDACIÓN DE STOCK! ---
+    if articulo.stock_total < cantidad:
+        messages.error(
+            request, 
+            f"¡STOCK INSUFICIENTE! No se puede usar {cantidad} de '{articulo.nombre}'. "
+            f"Solo hay {articulo.stock_total} disponibles."
+        )
+        return redirect(redirect_url)
+    
+    # Si todo está bien, creamos la SalidaArticulo
+    SalidaArticulo.objects.create(
+        articulo=articulo,
+        cantidad=cantidad,
+        usuario_registra=request.user,
+        content_object=tarea  # ¡El enlace genérico a la Tarea!
+    )
+
+    messages.success(request, f"Se restaron {cantidad} x {articulo.nombre} del inventario para la tarea.")
+    return redirect(redirect_url)

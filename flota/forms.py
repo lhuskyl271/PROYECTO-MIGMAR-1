@@ -630,17 +630,26 @@ class OperadorSelectionForm(forms.Form):
 class TareaCorrectivaForm(forms.ModelForm):
     """
     Formulario para una TareaCorrectiva individual, usado en el formset.
+    (Versión actualizada SIN el campo de texto 'piezas_utilizadas')
     """
     class Meta:
         model = TareaCorrectiva
+        # --- CAMPO ELIMINADO DE LA LISTA ---
         fields = ['refaccion', 'usuario_asignado', 'fecha_limite', 'status']
+        # --- FIN DE MODIFICACIÓN ---
+        
         widgets = {
             'refaccion': forms.Textarea(attrs={
                 'class': 'form-control', 
                 'rows': 2, 
                 'style': 'text-transform:uppercase;',
-                'placeholder': 'Descripción de la refacción o tarea'
+                'placeholder': 'Descripción de la tarea a realizar'
             }),
+            
+            # --- WIDGET ELIMINADO ---
+            # 'piezas_utilizadas': forms.Textarea(...)
+            # --- FIN WIDGET ELIMINADO ---
+            
             'usuario_asignado': forms.Select(attrs={'class': 'form-select'}),
             'fecha_limite': forms.DateInput(
                 format='%Y-%m-%d',

@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="card shadow-lg border-0 border-top border-danger border-4">
+                <div class="card-header bg-danger bg-opacity-10 text-danger-emphasis">
+                    <h4 class="mb-0 fw-bold"><i class="fas fa-exclamation-triangle me-2"></i> Confirmar Eliminación</h4>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <p class="fs-5">¿Estás seguro de que deseas eliminar permanentemente esta entrada de compra?</p>
+                    <p class="text-muted">Esta acción no se puede deshacer y recalculará el stock total del artículo.</p>
+                    
+                    <div class="alert alert-warning">
+                        <h6 class="fw-bold mb-1">{{ entrada.articulo.nombre }}</h6>
+                        <ul class="list-unstyled mb-0 small">
+                            <li><strong>Proveedor:</strong> {{ entrada.proveedor.nombre }}</li>
+                            <li><strong>Cantidad:</strong> {{ entrada.cantidad|intcomma }}</li>
+                            <li><strong>Fecha:</strong> {{ entrada.fecha_compra|date:"d M Y" }}</li>
+                            <li><strong>Precio:</strong> $ {{ entrada.precio_compra|floatformat:2|intcomma }}</li>
+                        </ul>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'almacen:articulo-detalle' pk=entrada.articulo.pk %}" class="btn btn-outline-secondary rounded-pill px-4">
+                                <i class="fas fa-times me-1"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-danger rounded-pill px-4 shadow-sm">
+                                <i class="fas fa-trash-alt me-1"></i> Sí, Eliminar Permanentemente
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h1 class="h2 mb-4">{{ titulo }}</h1>
+
+    <div class="row g-4">
+
+        <div class="col-lg-5">
+            <div class="card shadow-lg border-0 h-100">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-tags me-2"></i> Categorías</h5>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="card-body">
+                        <h6 class="fw-semibold">Crear Nueva Categoría</h6>
+                        <div class="input-group mb-3">
+                            {{ categoria_form.nombre }}
+                            <button type="submit" name="submit_categoria" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i> Guardar Categoría
+                            </button>
+                        </div>
+                        {% if categoria_form.nombre.errors %}
+                            <div class="alert alert-danger p-2 small">
+                                {{ categoria_form.nombre.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </form>
+                <hr class="my-0">
+                
+                <div class="card-body">
+                    <h6 class="fw-semibold">Categorías Existentes</h6>
+                    {% if categorias %}
+                        <div class="list-group">
+                            {% for cat in categorias %}
+                            <div class="list-group-item list-group-item-action d-flex flex-column justify-content-between align-items-start">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1 fw-bold">{{ cat.nombre }}</h6>
+                                    <span class="badge bg-primary rounded-pill">{{ cat.subcategorias.count }}</span>
+                                </div>
+                                <ul class="list-unstyled ms-3 mt-2 mb-0" style="font-size: 0.9rem;">
+                                    {% for sub in cat.subcategorias.all %}
+                                        <li><span class="badge bg-secondary fw-normal">{{ sub.nombre }}</span></li>
+                                    {% empty %}
+                                        <li><small class="text-muted fst-italic">Sin sub-categorías asignadas</small></li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-light text-center">
+                            No hay categorías creadas.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-lg border-0 h-100">
+                <div class="card-header bg-gradient-info text-white">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-tag me-2"></i> Sub-Categorías</h5>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="card-body">
+                        <h6 class="fw-semibold">Crear Nueva Sub-Categoría</h6>
+                        <div class="mb-3">
+                            <label for="{{ subcategoria_form.categoria.id_for_label }}" class="form-label">Asignar a Categoría:</label>
+                            {{ subcategoria_form.categoria }}
+                            {% if subcategoria_form.categoria.errors %}
+                                <div class="alert alert-danger p-2 small mt-1">
+                                    {{ subcategoria_form.categoria.errors.as_text }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ subcategoria_form.nombre.id_for_label }}" class="form-label">Nombre de la Sub-Categoría:</label>
+                            {{ subcategoria_form.nombre }}
+                            {% if subcategoria_form.nombre.errors %}
+                                <div class="alert alert-danger p-2 small mt-1">
+                                    {{ subcategoria_form.nombre.errors.as_text }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <button type="submit" name="submit_subcategoria" class="btn btn-info w-100">
+                            <i class="fas fa-plus me-1"></i> Guardar Sub-Categoría
+                        </button>
+                    </div>
+                </form>
+                </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Inicializa Select2 en los formularios que lo necesiten
+    $(document).ready(function() {
+        // Aplica Select2 a los selects en el formulario de Sub-Categoría
+        $('#{{ subcategoria_form.categoria.id_for_label }}').select2({
+            theme: "bootstrap-5"
+        });
+    });
+</script>
+{% endblock %}

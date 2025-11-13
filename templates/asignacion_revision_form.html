@@ -428,28 +428,25 @@
 
     {% if asignacion.tipo_programacion == 'CORRECTIVO' %}
     <div class="modal fade" id="correctivoModal-{{ asignacion.pk }}" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content border-0 shadow-lg" onclick="event.stopPropagation();">
+        <div class="modal-dialog modal-dialog-centered modal-xl"> <div class="modal-content border-0 shadow-lg" onclick="event.stopPropagation();">
                 
-                <form action="{% url 'update-correctivo-details' asignacion.pk %}" method="post">
-                    {% csrf_token %}
-                    
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">
-                            <i class="fas fa-tools me-2"></i> Tareas de M. Correctivo
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    
-                    <div class="modal-body py-4 bg-light">
-                        <p class="text-muted px-3">Gestión de tareas para la unidad: <strong>{{ asignacion.unidad.nombre }}</strong></p>
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-tools me-2"></i> Tareas de M. Correctivo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body py-4 bg-light">
+                    <p class="text-muted px-3">Gestión de tareas para la unidad: <strong>{{ asignacion.unidad.nombre }}</strong></p>
 
-                        {% if asignacion.tareas_list %}
-                            <h6 class="px-3 mt-4 mb-2 fw-bold">Tareas Registradas</h6>
-                            <ul class="list-group list-group-flush mb-3 shadow-sm rounded">
-                            {% for tarea in asignacion.tareas_list %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center p-3">
-                                    <div>
+                    {% if asignacion.tareas_list %}
+                        <h6 class="px-3 mt-4 mb-2 fw-bold">Tareas Registradas</h6>
+                        <ul class="list-group list-group-flush mb-3 shadow-sm rounded">
+                        {% for tarea in asignacion.tareas_list %}
+                            <li class="list-group-item p-3">
+                                <div class="row g-3">
+                                    <div class="col-md-5">
                                         <strong class="d-block text-dark">{{ tarea.refaccion }}</strong>
                                         <small class="text-muted">
                                             <i class="fas fa-user-cog me-1"></i> {{ tarea.usuario_asignado.username }}
@@ -457,105 +454,132 @@
                                                 <i class="fas fa-calendar-alt ms-2 me-1"></i> {{ tarea.fecha_limite|date:"d M, Y" }}
                                             {% endif %}
                                         </small>
+                                        <span class="badge 
+                                            {% if tarea.status == 'PENDIENTE' %}bg-warning text-dark{% else %}bg-success{% endif %} 
+                                            rounded-pill ms-2">{{ tarea.get_status_display }}</span>
                                     </div>
-                                    {% if tarea.status == 'PENDIENTE' %}
-                                        <span class="badge bg-warning text-dark rounded-pill">Pendiente</span>
-                                    {% else %}
-                                        <span class="badge bg-success rounded-pill">Completada</span>
-                                    {% endif %}
-                                </li>
-                            {% endfor %}
-                            </ul>
-                        {% endif %}
+                                    
+                                    <div class="col-md-7 border-start">
+                                        <strong class="d-block text-dark" style="font-size: 0.85rem;"><i class="fas fa-cogs me-1"></i> Piezas Asignadas:</strong>
+                                        
+                                        <ul class="list-unstyled mb-2 ps-3" style="font-size: 0.85rem;">
+                                            {% for pieza in tarea.piezas.all %}
+                                                <li class="text-muted">
+                                                    <i class="fas fa-check-circle text-success me-1"></i> 
+                                                    {{ pieza.cantidad }} x {{ pieza.articulo.nombre }}
+                                                </li>
+                                            {% empty %}
+                                                <li class="text-muted fst-italic">
+                                                    <i class="fas fa-times-circle text-danger me-1"></i>
+                                                    Sin piezas asignadas.
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                        
+                                        <form action="{% url 'add-pieza-a-tarea' tarea.pk %}" method="post" class="row g-2">
+                                            {% csrf_token %}
+                                            <div class="col-7">
+                                                <select name="articulo" class="form-select form-select-sm" required>
+                                                    <option value="" disabled selected>-- Asignar pieza (Stock > 0) --</option>
+                                                    {% for art in lista_articulos_inventario %}
+                                                        <option value="{{ art.pk }}">
+                                                            {{ art.nombre }} (Stock: {{ art.stock_total }})
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-2">
+                                                <input type="number" name="cantidad" class="form-control form-control-sm" placeholder="Cant." min="1" value="1" required>
+                                            </div>
+                                            <div class="col-3">
+                                                <button type="submit" class="btn btn-info btn-sm w-100 shadow-sm" title="Añadir pieza y restar de inventario">
+                                                    <i class="fas fa-plus"></i> Añadir
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
 
+                    <form action="{% url 'update-correctivo-details' asignacion.pk %}" method="post">
+                        {% csrf_token %}
+                        
                         <h6 class="px-3 mt-4 mb-2 fw-bold">Añadir / Editar Tareas</h6>
-                        <div id="formset-container-{{ asignacion.pk }}">
-                            
-                            {{ asignacion.correctivo_formset.management_form }}
-                            
-                            {% for form in asignacion.correctivo_formset %}
-                            <div class="card mb-3 formset-row shadow-sm">
-                                <div class="card-body p-3">
-                                    {{ form.id }} {# Campo oculto para el ID #}
-                                    <div class="row g-2">
-                                        <div class="col-12">
-                                            <label class="form-label form-label-sm fw-semibold">Descripción (Refacción/Tarea)</label>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered bg-white shadow-sm align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40%;">Descripción de la Tarea</th>
+                                        <th style="width: 25%;">Usuario Asignado (Técnico)</th>
+                                        <th style="width: 15%;">Fecha Límite</th>
+                                        <th style="width: 15%;">Estado</th>
+                                        <th style="width: 5%;" class="text-center"><i class="fas fa-trash-alt"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="formset-container-{{ asignacion.pk }}">
+                                    {{ asignacion.correctivo_formset.management_form }}
+                                    
+                                    {% for form in asignacion.correctivo_formset %}
+                                    <tr class="formset-row">
+                                        {{ form.id }} {# Campo oculto para el ID #}
+                                        <td>
                                             {{ form.refaccion }}
                                             {% if form.refaccion.errors %}<div class="invalid-feedback d-block">{{ form.refaccion.errors.as_text }}</div>{% endif %}
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="form-label form-label-sm fw-semibold">Usuario Asignado</label>
+                                        </td>
+                                        <td>
                                             {{ form.usuario_asignado }}
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label form-label-sm fw-semibold">Fecha Límite</label>
-                                            {{ form.fecha_limite }}
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label form-label-sm fw-semibold">Estado</label>
-                                            {{ form.status }}
-                                        </div>
-                                        <div class="col-12 text-end">
+                                        </td>
+                                        <td>{{ form.fecha_limite }}</td>
+                                        <td>{{ form.status }}</td>
+                                        <td class="text-center">
                                             {% if form.instance.pk %}
-                                            <div class="form-check form-check-inline">
                                                 {{ form.DELETE }}
-                                                <label class="form-check-label text-danger" for="{{ form.DELETE.id_for_label }}">
-                                                    <i class="fas fa-trash-alt"></i> Eliminar Tarea
-                                                </label>
-                                            </div>
                                             {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
 
-                        <div class="d-none" id="empty-form-{{ asignacion.pk }}">
-                            <div class="card mb-3 formset-row" id="form-__prefix__">
+                        <template id="empty-form-{{ asignacion.pk }}">
+                            <tr class="formset-row" id="form-__prefix__">
                                 {{ asignacion.correctivo_formset.empty_form.id }}
-                                <div class="card-body p-3">
-                                    <div class="row g-2">
-                                        <div class="col-12">
-                                            <label class="form-label form-label-sm fw-semibold">Descripción (Refacción/Tarea)</label>
-                                            {{ asignacion.correctivo_formset.empty_form.refaccion }}
-                                        </div>
-                                        <div class="col-md-5">
-                                            <label class="form-label form-label-sm fw-semibold">Usuario Asignado</label>
-                                            {{ asignacion.correctivo_formset.empty_form.usuario_asignado }}
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label form-label-sm fw-semibold">Fecha Límite</label>
-                                            {{ asignacion.correctivo_formset.empty_form.fecha_limite }}
-                                        </div>
-                                        <div class="col-md-3">
-                                            <label class="form-label form-label-sm fw-semibold">Estado</label>
-                                            {{ asignacion.correctivo_formset.empty_form.status }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="px-3">
+                                <td>
+                                    {{ asignacion.correctivo_formset.empty_form.refaccion }}
+                                </td>
+                                <td>
+                                    {{ asignacion.correctivo_formset.empty_form.usuario_asignado }}
+                                </td>
+                                <td>
+                                    {{ asignacion.correctivo_formset.empty_form.fecha_limite }}
+                                </td>
+                                <td>
+                                    {{ asignacion.correctivo_formset.empty_form.status }}
+                                </td>
+                                <td class="text-center">
+                                    </td>
+                            </tr>
+                        </template>
+                        <div class="px-3 mt-2">
                             <button type="button" class="btn btn-outline-primary btn-sm rounded-pill w-100 add-formset-row"
-                                    data-prefix="tareas-{{ asignacion.pk }}"
+                                    data-prefix="{{ asignacion.correctivo_formset.prefix }}"
                                     data-empty-form-id="empty-form-{{ asignacion.pk }}"
                                     data-container-id="formset-container-{{ asignacion.pk }}">
                                 <i class="fas fa-plus me-1"></i> Añadir otra Tarea
                             </button>
                         </div>
-
-                    </div>
-                    
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
-                        <button type="submit" class="btn btn-danger rounded-pill px-4">
-                            <i class="fas fa-save me-1"></i> Guardar Tareas
-                        </button>
-                    </div>
-                </form>
-            </div>
+                        
+                        <div class="modal-footer mt-4 border-top pt-3">
+                            <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+                            <button type="submit" class="btn btn-danger rounded-pill px-4">
+                                <i class="fas fa-save me-1"></i> Guardar Tareas
+                            </button>
+                        </div>
+                    </form> </div> </div>
         </div>
     </div>
     {% endif %}
@@ -720,7 +744,7 @@
 </div>
 
 <style>
-    /* ... (Estilos CSS, sin cambios) ... */
+    /* ... (Estilos CSS existentes) ... */
     .bg-gradient-primary { background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%); }
     .bg-gradient-info { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
     .card { border-radius: 16px; overflow: hidden; }
@@ -767,14 +791,38 @@
         background-color: #000;
     }
     
-    /* === INICIO: NUEVOS ESTILOS PARA FORMSET === */
+    /* === INICIO: NUEVOS ESTILOS PARA LA TABLA DEL FORMSET === */
     .form-label-sm { font-size: 0.75rem; margin-bottom: 0.2rem; }
+    
+    /* Quitamos el padding global y usamos el de la celda de la tabla */
     .formset-row .form-control, .formset-row .form-select {
         font-size: 0.9rem;
         padding: 0.5rem 0.75rem;
+        width: 100%; /* Hacemos que ocupe todo el ancho de la celda */
     }
-    .formset-row .form-check-label {
-        font-size: 0.9rem;
+    .formset-row td {
+        padding: 0.5rem;
+        vertical-align: top; /* Alinear al inicio por si hay errores */
+    }
+    
+    /* Estilos para el checkbox de eliminar */
+    .formset-row .form-check-input {
+        margin-top: 0.5rem;
+    }
+
+    /* === ESTILOS PARA SELECT2 === */
+    /* Asegura que Select2 ocupe el 100% del ancho de la celda */
+    .formset-row .select2-container {
+        width: 100% !important;
+    }
+    /* Ajusta el tamaño para que coincida con los otros form-controls */
+    .select2-selection {
+        font-size: 0.9rem !important;
+        padding: 0.25rem 0.5rem !important;
+        min-height: calc(1.5em + 1rem + 2px) !important;
+    }
+    .select2-selection__arrow {
+        top: 0.4rem !important;
     }
     /* === FIN: NUEVOS ESTILOS === */
 </style>
@@ -856,9 +904,8 @@
     }
 
 
+    // --- Guardar Correcciones AJAX (Existente) ---
     document.addEventListener('DOMContentLoaded', () => {
-    
-        // --- Guardar Correcciones AJAX (Existente) ---
         const saveButtons = document.querySelectorAll('.btn-guardar-correccion');
         saveButtons.forEach(button => {
             button.addEventListener('click', function(e) {
@@ -1039,48 +1086,78 @@
             });
         });
 
-        // ========================================================
-        // === INICIO: NUEVO SCRIPT PARA "AÑADIR TAREA" (FORMSET) ===
-        // ========================================================
-        document.querySelectorAll('.add-formset-row').forEach(button => {
-            button.addEventListener('click', function(e) {
+        // ===================================================================
+        // === INICIO DE MEJORA: LÓGICA DE FORMSET CON JQUERY Y SELECT2 ===
+        // ===================================================================
+        // (Esto reemplaza el script 'add-formset-row' anterior)
+        
+        /**
+         * Inicializa un elemento Select2 con tema Bootstrap 5.
+         * Se asegura de que el menú desplegable de búsqueda funcione dentro de un modal.
+         */
+        function initSelect2(selector) {
+            $(selector).select2({
+                theme: 'bootstrap-5',
+                // Esta línea es clave para que la búsqueda funcione DENTRO del modal
+                dropdownParent: $(selector).closest('.modal-body'),
+                width: '100%'
+            });
+        }
+
+        // Usamos $(document).ready() de jQuery ya que Select2 depende de él
+        $(document).ready(function() {
+            
+            // 1. Inicializa Select2 en todos los campos de técnico que ya existen
+            initSelect2('.select2-tecnico');
+
+            // 2. Nuevo listener para añadir filas al formset
+            $('.add-formset-row').on('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                const prefix = this.dataset.prefix;
-                const emptyFormId = this.dataset.emptyFormId;
-                const containerId = this.dataset.containerId;
-
-                const container = document.getElementById(containerId);
-                const template = document.getElementById(emptyFormId);
+                // Obtenemos los data-attributes del botón
+                const prefix = $(this).data('prefix');
+                const containerId = $(this).data('container-id');
+                const templateId = $(this).data('empty-form-id');
                 
-                if (!container || !template) {
+                const container = $('#' + containerId); // El <tbody>
+                const template = document.getElementById(templateId); // El <template>
+                
+                if (!container.length || !template) {
                     console.error('Formset container or template not found!');
                     return;
                 }
 
-                // 1. Encuentra el total de formularios actual
-                const totalFormsInput = document.querySelector(`input[name="${prefix}-TOTAL_FORMS"]`);
-                let totalForms = parseInt(totalFormsInput.value, 10);
+                // 1. Obtener el contador total de formularios
+                const totalFormsInput = $(`input[name="${prefix}-TOTAL_FORMS"]`);
+                let totalForms = parseInt(totalFormsInput.val(), 10);
 
-                // 2. Clona la plantilla y reemplaza el prefijo
-                let newFormHtml = template.innerHTML.replace(/__prefix__/g, totalForms);
+                // 2. Clonar el contenido de la plantilla <template>
+                let newForm = template.content.cloneNode(true);
                 
-                // 3. Crea un div temporal para insertar el HTML
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = newFormHtml;
-                const newFormElement = tempDiv.firstElementChild;
+                // 3. Reemplazar el prefijo '__prefix__' por el nuevo índice
+                // Tenemos que hacerlo en el HTML crudo
+                let tempDiv = document.createElement('div');
+                tempDiv.appendChild(newForm); // newForm es un DocumentFragment
+                let newHtml = tempDiv.innerHTML.replace(/__prefix__/g, totalForms);
+                
+                // 4. Convertir el HTML de nuevo a un nodo y añadirlo a la tabla
+                let newRow = $(newHtml);
+                container.append(newRow);
 
-                // 4. Inserta el nuevo formulario en el contenedor
-                container.appendChild(newFormElement);
+                // 5. ¡CRÍTICO! Inicializar Select2 en la NUEVA fila que acabamos de añadir
+                initSelect2(newRow.find('.select2-tecnico'));
 
-                // 5. Incrementa el contador de formularios
-                totalFormsInput.value = totalForms + 1;
+                // 6. Incrementar el contador total de formularios
+                totalFormsInput.val(totalForms + 1);
             });
         });
-        // === FIN: NUEVO SCRIPT ===
+        
+        // ===================================================================
+        // === FIN DE LA MEJORA DE JAVASCRIPT ================================
+        // ===================================================================
 
-    });
+    }); // Fin del DOMContentLoaded original
 
 </script>
 {% endblock %}
