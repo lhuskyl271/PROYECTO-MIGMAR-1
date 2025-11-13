@@ -2254,7 +2254,7 @@ def download_llantas_general_excel(request):
 class AsignacionRevisionView(AdminRequiredMixin, CreateView):
     """
     Vista principal para crear asignaciones y ver la lista del día.
-    (MODIFICADA CON LA NUEVA LÓGICA DE ANTIGÜEDAD DE CHECKLIST)
+    (MODIFICADA para ignorar checklists 'dummy' en el conteo de días)
     """
     model = AsignacionRevision
     form_class = AsignacionRevisionForm
@@ -2326,8 +2326,16 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
             
             # Lógica de Fallas (basado en tu HTML)
             try:
-                # 1. Usamos el nombre correcto: 'checklistinspeccion_set' y 'fecha'
-                latest_checklist = asignacion.unidad.checklistinspeccion_set.latest('fecha')
+                # --- INICIO DE LA MODIFICACIÓN (TU NUEVO REQUERIMIENTO) ---
+                #
+                # Ahora solo buscamos el último checklist que NO sea dummy
+                #
+                latest_checklist = asignacion.unidad.checklistinspeccion_set.filter(
+                    es_dummy=False
+                ).latest('fecha')
+                #
+                # --- FIN DE LA MODIFICACIÓN ---
+                
                 asignacion.latest_checklist_date = latest_checklist.fecha
                 
                 # 2. Usamos la relación correcta 'correcciones' y filtramos por 'PENDIENTE'
@@ -2376,10 +2384,10 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
             else:
                 # Regla 2: Si es 'Normal', checar la antigüedad del checklist.
                 if asignacion.latest_checklist_date is None:
-                    # Si NUNCA ha tenido un checklist, es proceso completo.
+                    # Si NUNCA ha tenido un checklist (real), es proceso completo.
                     asignacion.needs_full_process = True
                 else:
-                    # Calcular días desde el último checklist
+                    # Calcular días desde el último checklist (real)
                     dias_desde_ultimo_check = (today - asignacion.latest_checklist_date.date()).days
                     
                     if dias_desde_ultimo_check >= 8:
@@ -2396,7 +2404,8 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
         # --- ¡NUEVA LÍNEA CRÍTICA! ---
         # Pasamos la lista de artículos del inventario al contexto
         # para usarla en el dropdown del modal.
-        context['lista_articulos_inventario'] = Articulo.objects.filter(
+        # (Asegúrate de importar 'Articulo' de 'almacen.models')
+        context['lista_articulos_inventARIO'] = Articulo.objects.filter(
             stock_total__gt=0
         ).order_by(
             'subcategoria__categoria__nombre', 'subcategoria__nombre', 'nombre'
