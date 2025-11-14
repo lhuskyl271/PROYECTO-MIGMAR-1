@@ -427,23 +427,23 @@ class LlantasInspeccionForm(forms.ModelForm):
             'km': forms.NumberInput(attrs={'class': 'form-control'}),
         }
 
-class LlantasKmForm(forms.Form):
-    """Formulario para capturar y validar el kilometraje de la unidad."""
-    km = forms.IntegerField(
-        label="Kilometraje de la Unidad",
-        widget=forms.NumberInput(attrs={'class': 'form-control'})
-    )
-
-    def __init__(self, *args, **kwargs):
-        self.unidad = kwargs.pop('unidad', None)
-        self.user = kwargs.pop('user', None) # Añadimos el usuario
-        super().__init__(*args, **kwargs)
-
-    def clean_km(self):
+def clean_km(self):
         km_ingresado = self.cleaned_data.get('km')
-        is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
+
+        # === INICIO DE DEBUG ===
+        print("="*30)
+        print(f"DEBUG clean_km - Usuario: {self.user}")
         
-        # ✅ CORRECCIÓN: Envolvemos la lógica con "if not is_admin"
+        is_staff = self.user and self.user.is_staff
+        is_in_group = self.user and self.user.groups.filter(name='Administrador').exists()
+        is_admin = is_staff or is_in_group
+
+        print(f"DEBUG - Es Staff? {is_staff}")
+        print(f"DEBUG - Está en grupo 'Administrador'? {is_in_group}")
+        print(f"DEBUG - RESULTADO: es_admin = {is_admin}")
+        print("="*30)
+        # === FIN DE DEBUG ===
+        
         if not is_admin:
             if self.unidad and km_ingresado is not None:
                 if km_ingresado <= self.unidad.km_actual:
