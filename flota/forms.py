@@ -109,6 +109,10 @@ class CargaDieselForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         self.unidad_instance = kwargs.pop('unidad', None)
         
+        # --- LÍNEA AÑADIDA ---
+        self.user = user # Guardamos el usuario
+        # --- FIN LÍNEA AÑADIDA ---
+
         if 'instance' in kwargs and kwargs['instance']:
             self.unidad_instance = kwargs['instance'].unidad
 
@@ -182,8 +186,16 @@ class CargaDieselForm(forms.ModelForm):
         ultima_carga = CargaDiesel.objects.filter(unidad=unidad).order_by('-fecha').first()
         if ultima_carga:
             km_actual_form = cleaned_data.get('km_actual')
-            if km_actual_form is not None and km_actual_form <= ultima_carga.km_actual:
-                self.add_error('km_actual', f"El kilometraje debe ser mayor al último registrado ({ultima_carga.km_actual} km).")
+            
+            # ================= INICIO DE LA MODIFICACIÓN =================
+            # Solo aplicamos la validación de KM si el usuario NO es un admin.
+            # (Un admin necesita poder corregir KMs incorrectos).
+            is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
+
+            if not is_admin:
+                if km_actual_form is not None and km_actual_form <= ultima_carga.km_actual:
+                    self.add_error('km_actual', f"El kilometraje debe ser mayor al último registrado ({ultima_carga.km_actual} km).")
+            # ================= FIN DE LA MODIFICACIÓN ===================
             
             hrs_thermo_form = cleaned_data.get('hrs_thermo')
             if hrs_thermo_form is not None and hrs_thermo_form <= (ultima_carga.hrs_thermo or 0):
@@ -424,15 +436,21 @@ class LlantasKmForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.unidad = kwargs.pop('unidad', None)
+        self.user = kwargs.pop('user', None) # Añadimos el usuario
         super().__init__(*args, **kwargs)
 
     def clean_km(self):
         km_ingresado = self.cleaned_data.get('km')
-        if self.unidad and km_ingresado is not None:
-            if km_ingresado <= self.unidad.km_actual:
-                raise ValidationError(
-                    f"El kilometraje debe ser mayor al último registrado ({self.unidad.km_actual} km)."
-                )
+        is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
+        
+        # ✅ CORRECCIÓN: Envolvemos la lógica con "if not is_admin"
+        if not is_admin:
+            if self.unidad and km_ingresado is not None:
+                if km_ingresado <= self.unidad.km_actual:
+                    raise ValidationError(
+                        f"El kilometraje debe ser mayor al último registrado ({self.unidad.km_actual} km)."
+                    )
+                    
         return km_ingresado
 
 class LlantaDetalleForm(forms.ModelForm):

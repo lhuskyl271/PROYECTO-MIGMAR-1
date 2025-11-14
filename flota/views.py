@@ -526,6 +526,13 @@ class CargaDieselUpdateView(AdminRequiredMixin, UpdateView):
         context['titulo'] = f"Edicion Diesel {self.object.fecha.strftime('%d/%m/%Y')}"
         return context
     
+    # --- MÉTODO A AÑADIR ---
+    def get_form_kwargs(self):
+        """Pasa el usuario actual al formulario."""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
 class CargaDieselDeleteView(AdminRequiredMixin, DeleteView):
     model = CargaDiesel
     template_name = 'generic_confirm_delete.html'
@@ -1084,7 +1091,8 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
         # Creamos y pasamos el formulario de KM con los datos existentes
         context['km_form'] = LlantasKmForm(
             initial={'km': inspeccion.km},
-            unidad=inspeccion.unidad
+            unidad=inspeccion.unidad,
+            user=self.request.user  # <-- MODIFICACIÓN (Pasa el usuario)
         )
         # --- FIN: CÓDIGO AÑADIDO ---
         
@@ -1103,7 +1111,11 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
         
         # Validamos ambos formularios: el de KM y el de los detalles de llantas
         form = self.get_form()
-        km_form = LlantasKmForm(request.POST, unidad=self.object.unidad)
+        
+        # --- LÍNEA MODIFICADA ---
+        # Pasa el usuario al formulario para la validación
+        km_form = LlantasKmForm(request.POST, unidad=self.object.unidad, user=self.request.user)
+        # --- FIN LÍNEA MODIFICADA ---
         
         FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0)
         formset = FormSet(request.POST, instance=self.object, prefix='llantas')
