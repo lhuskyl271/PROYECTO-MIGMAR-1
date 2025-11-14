@@ -163,39 +163,24 @@ class CargaDieselForm(forms.ModelForm):
         cleaned_data = super().clean()
 
         # # --- INICIO: VALIDACIÓN DE INVENTARIO DESACTIVADA ---
-        # if not self.instance.pk:
-        #     lts_a_cargar = cleaned_data.get('lts_diesel', 0) or 0
-        #     thermo_a_cargar = cleaned_data.get('lts_thermo', 0) or 0
-        #     total_a_cargar = lts_a_cargar + thermo_a_cargar
-        #
-        #     if total_a_cargar > 0:
-        #         total_comprado = CompraSuministro.objects.filter(tipo_suministro='DIESEL').aggregate(total=Sum('cantidad'))['total'] or 0
-        #         consumo_motor = CargaDiesel.objects.aggregate(total=Sum('lts_diesel'))['total'] or 0
-        #         consumo_thermo = CargaDiesel.objects.aggregate(total=Sum('lts_thermo'))['total'] or 0
-        #         inventario_actual = total_comprado - (consumo_motor + consumo_thermo)
-        #
-        #         if total_a_cargar > inventario_actual:
-        #             raise ValidationError(
-        #                 f"No se puede cargar {total_a_cargar} L de diésel. "
-        #                 f"Solo hay {inventario_actual:.2f} L disponibles en el inventario."
-        #             )
+        # ... (código de inventario) ...
         # # --- FIN: VALIDACIÓN DE INVENTARIO DESACTIVADA ---
 
         unidad = self.unidad_instance or cleaned_data.get('unidad')
         if not unidad: return cleaned_data
+        
         ultima_carga = CargaDiesel.objects.filter(unidad=unidad).order_by('-fecha').first()
         if ultima_carga:
             km_actual_form = cleaned_data.get('km_actual')
             
-            # ================= INICIO DE LA MODIFICACIÓN =================
-            # Solo aplicamos la validación de KM si el usuario NO es un admin.
-            # (Un admin necesita poder corregir KMs incorrectos).
+            # ================= INICIO DE LA RESTAURACIÓN =================
+            # Esta validación se aplica a todos, excepto a los admins.
             is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
 
             if not is_admin:
                 if km_actual_form is not None and km_actual_form <= ultima_carga.km_actual:
                     self.add_error('km_actual', f"El kilometraje debe ser mayor al último registrado ({ultima_carga.km_actual} km).")
-            # ================= FIN DE LA MODIFICACIÓN ===================
+            # ================= FIN DE LA RESTAURACIÓN ===================
             
             hrs_thermo_form = cleaned_data.get('hrs_thermo')
             if hrs_thermo_form is not None and hrs_thermo_form <= (ultima_carga.hrs_thermo or 0):
@@ -416,42 +401,44 @@ class ChecklistInspeccionForm(forms.ModelForm):
                     'accept': 'image/*',
                     'capture': 'environment'
                 })
+                
+class LlantasKmForm(forms.Form):
+    """Formulario para capturar y validar el kilometraje de la unidad."""
+    km = forms.IntegerField(
+        label="Kilometraje de la Unidad",
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.unidad = kwargs.pop('unidad', None)
+        self.user = kwargs.pop('user', None) # Se queda por si se usa en el futuro
+        super().__init__(*args, **kwargs)
+
+    # ==================================================
+    # === SE ELIMINA LA VALIDACIÓN DE KILOMETRAJE ===
+    # ==================================================
+    # def clean_km(self):
+    #     km_ingresado = self.cleaned_data.get('km')
+    #     
+    #     is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
+    #     
+    #     if not is_admin:
+    #         if self.unidad and km_ingresado is not None:
+    #             if km_ingresado <= self.unidad.km_actual:
+    #                 raise ValidationError(
+    #                     f"El kilometraje debe ser mayor al último registrado ({self.unidad.km_actual} km)."
+    #                 )
+    #                 
+    #     return km_ingresado
+    # ==================================================
+    # === FIN DE LA ELIMINACIÓN ========================
+    # ==================================================
 
 class LlantasInspeccionForm(forms.ModelForm):
     """Formulario para la cabecera de la inspección de llantas (Admin)."""
     class Meta:
         model = LlantasInspeccion
-        fields = ['unidad', 'km']
-        widgets = {
-            'unidad': forms.Select(attrs={'class': 'form-select'}),
-            'km': forms.NumberInput(attrs={'class': 'form-control'}),
-        }
-
-def clean_km(self):
-        km_ingresado = self.cleaned_data.get('km')
-
-        # === INICIO DE DEBUG ===
-        print("="*30)
-        print(f"DEBUG clean_km - Usuario: {self.user}")
-        
-        is_staff = self.user and self.user.is_staff
-        is_in_group = self.user and self.user.groups.filter(name='Administrador').exists()
-        is_admin = is_staff or is_in_group
-
-        print(f"DEBUG - Es Staff? {is_staff}")
-        print(f"DEBUG - Está en grupo 'Administrador'? {is_in_group}")
-        print(f"DEBUG - RESULTADO: es_admin = {is_admin}")
-        print("="*30)
-        # === FIN DE DEBUG ===
-        
-        if not is_admin:
-            if self.unidad and km_ingresado is not None:
-                if km_ingresado <= self.unidad.km_actual:
-                    raise ValidationError(
-                        f"El kilometraje debe ser mayor al último registrado ({self.unidad.km_actual} km)."
-                    )
-                    
-        return km_ingresado
+        fields = []  # <--- ASÍ DEBE QUEDAR
 
 class LlantaDetalleForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):

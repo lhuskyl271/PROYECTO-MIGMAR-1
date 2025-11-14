@@ -1070,7 +1070,6 @@ class LlantasInspeccionCreateView(AdminRequiredMixin, CreateView):
 
 class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
     model = LlantasInspeccion
-    # --- CAMBIO 1: El formulario principal ahora se define aquí ---
     form_class = LlantasInspeccionForm 
     template_name = 'llantas_form_unificado.html'
     success_url = reverse_lazy('llantas-list')
@@ -1078,23 +1077,19 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # --- INICIO: CÓDIGO AÑADIDO PARA CORREGIR DATOS EN BLANCO ---
-        # Obtenemos la inspección que se está editando
         inspeccion = self.get_object()
         
-        # Pasamos los datos que faltaban a la plantilla
         context['titulo'] = f"Editar Inspección de Llantas: {inspeccion.unidad.nombre}"
         context['unidad'] = inspeccion.unidad
         context['fecha_actual'] = inspeccion.fecha
-        context['form_mode'] = 'update' # Variable para controlar los botones
+        context['form_mode'] = 'update' 
 
-        # Creamos y pasamos el formulario de KM con los datos existentes
+        # Esta parte pasa el 'user' al formulario cuando la página CARGA
         context['km_form'] = LlantasKmForm(
             initial={'km': inspeccion.km},
             unidad=inspeccion.unidad,
-            user=self.request.user  # <-- MODIFICACIÓN (Pasa el usuario)
+            user=self.request.user
         )
-        # --- FIN: CÓDIGO AÑADIDO ---
         
         FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0, max_num=6, can_delete=True)
         
@@ -1107,34 +1102,36 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
 
     def post(self, request, *args, **kwargs):
         """Maneja el envío del formulario principal y el formset de detalles."""
+        
+        # === ¡NUEVO DEBUG PARA EL POST! ===
+        print("\n" + "="*40)
+        print("DEBUG POST: ¡ESTOY EN EL MÉTODO POST NUEVO!")
+        print(f"DEBUG POST: Usuario en VISTA es: {request.user}")
+        print("="*40 + "\n")
+        # ===================================
+        
         self.object = self.get_object()
         
-        # Validamos ambos formularios: el de KM y el de los detalles de llantas
         form = self.get_form()
         
-        # --- LÍNEA MODIFICADA ---
-        # Pasa el usuario al formulario para la validación
+        # Esta es la línea clave: Pasa el 'user' al formulario cuando GUARDA
         km_form = LlantasKmForm(request.POST, unidad=self.object.unidad, user=self.request.user)
-        # --- FIN LÍNEA MODIFICADA ---
         
-        FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0)
+        FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0, max_num=6, can_delete=True)
         formset = FormSet(request.POST, instance=self.object, prefix='llantas')
 
         if form.is_valid() and km_form.is_valid() and formset.is_valid():
             return self.form_valid(form, km_form, formset)
         else:
-            # Si hay un error, volvemos a renderizar todo con los errores
             return self.form_invalid(form, km_form, formset)
 
     def form_valid(self, form, km_form, formset):
         """Si todo es válido, guarda los cambios."""
         with transaction.atomic():
-            # Actualiza el KM de la inspección desde el km_form
             inspeccion = form.save(commit=False)
             inspeccion.km = km_form.cleaned_data['km']
             inspeccion.save()
             
-            # Guarda los cambios en los detalles de las llantas
             formset.save()
 
         messages.success(self.request, "Inspección de llantas actualizada correctamente.")
@@ -1144,9 +1141,9 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
         """Si hay errores, vuelve a mostrar el formulario con los datos y errores."""
         messages.error(self.request, "Por favor, corrija los errores marcados.")
         context = self.get_context_data()
-        context['form'] = form # El form principal (vacío en este caso, pero necesario)
-        context['km_form'] = km_form # El form de KM con sus errores
-        context['formset'] = formset # El formset de llantas con sus errores
+        context['form'] = form
+        context['km_form'] = km_form
+        context['formset'] = formset
         return self.render_to_response(context)
 
 class LlantasInspeccionDeleteView(AdminRequiredMixin, DeleteView):
@@ -1404,33 +1401,7 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
         if not km_form.is_valid() or not formset.is_valid():
             messages.error(request, 'Por favor, corrija los errores marcados en rojo.')
             
-            # --- INICIO: CÓDIGO DE DIAGNÓSTICO ---
-            # Estas líneas imprimirán información en tu consola de runserver.
-            print("=" * 60)
-            print("DIAGNÓSTICO DE FORMULARIO DE LLANTAS (POST INVÁLIDO)")
-            print(f"Timestamp: {datetime.now()}")
-            print(f"KM Form es válido: {km_form.is_valid()}")
-            if not km_form.is_valid():
-                print(f" -> Errores en KM Form: {km_form.errors.as_json()}")
-
-            print(f"Formset es válido: {formset.is_valid()}")
-            if not formset.is_valid():
-                print(f" -> Errores en Formset: {formset.errors}")
-
-            # Imprime los datos crudos que recibió el formset del POST.
-            # Esto nos mostrará si la información de las llantas está llegando al servidor.
-            print("\n--- DATOS CRUDOS RECIBIDOS POR EL FORMSET ---")
-            for i, form in enumerate(formset.forms):
-                # form.data contiene todos los datos del POST
-                # form.prefix nos da el prefijo correcto para este formulario (ej. 'llantas-0')
-                print(f"  Formulario {i} ({form.prefix}):")
-                print(f"    mm: '{form.data.get(f'{form.prefix}-mm')}'")
-                print(f"    marca: '{form.data.get(f'{form.prefix}-marca')}'")
-                print(f"    modelo: '{form.data.get(f'{form.prefix}-modelo')}'")
-                print(f"    medida: '{form.data.get(f'{form.prefix}-medida')}'")
-                print(f"    presion: '{form.data.get(f'{form.prefix}-presion')}'")
-            print("=" * 60)
-            # --- FIN: CÓDIGO DE DIAGNÓSTICO ---
+            # --- (código de diagnóstico) ...
 
             context = {
                 'titulo': f"Step 2: Tire Format for {unidad.nombre}",
@@ -1441,8 +1412,6 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
             }
             return self.render_to_response(context)
 
-        # Si todo es válido, el proceso continúa para guardar...
-        # ... (el resto del código de guardado se queda exactamente igual) ...
         checklist_id = request.session.get('proceso_checklist_id')
         if not checklist_id:
             messages.error(request, "La sesión ha expirado. Por favor, inicie de nuevo.")
@@ -1479,9 +1448,13 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
                     pass 
                 # ========= FIN DE LA LÓGICA AÑADIDA =========
                 
-                if km_llantas > unidad.km_actual:
-                    unidad.km_actual = km_llantas
-                    unidad.save()
+                # ========================================================
+                # === LÍNEA DE ACTUALIZACIÓN DE KM COMENTADA ===
+                # ========================================================
+                # if km_llantas > unidad.km_actual:
+                #     unidad.km_actual = km_llantas
+                #     unidad.save()
+                # ========================================================
 
             request.session.pop('proceso_checklist_id', None)
             messages.success(request, f"Proceso para {unidad.nombre} enviado a pendientes.")
@@ -1689,6 +1662,18 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
                 # Crear la carga de diésel (ya no dispara el recálculo)
                 carga_diesel_obj = CargaDiesel.objects.create(unidad=proceso.unidad, operador=operador, **diesel_data)
                 
+                # ========================================================
+                # === INICIO: LÓGICA DE ACTUALIZACIÓN DE KM MAESTRO ===
+                # ========================================================
+                km_de_la_carga = carga_diesel_obj.km_actual
+                unidad = proceso.unidad
+                if km_de_la_carga > unidad.km_actual:
+                    unidad.km_actual = km_de_la_carga
+                    unidad.save()
+                # ========================================================
+                # === FIN: LÓGICA DE ACTUALIZACIÓN DE KM MAESTRO ===
+                # ========================================================
+
                 carga_urea_obj = None
                 litros_urea_cargados = form.cleaned_data.get('litros_cargados')
                 
@@ -3587,3 +3572,144 @@ def add_pieza_a_tarea(request, tarea_pk):
 
     messages.success(request, f"Se restaron {cantidad} x {articulo.nombre} del inventario para la tarea.")
     return redirect(redirect_url)
+
+from django.template.loader import render_to_string
+try:
+    from weasyprint import HTML
+except ImportError:
+    HTML = None
+from almacen.models import Articulo, SalidaArticulo # <-- Asegúrate de tener SalidaArticulo
+
+
+# ==========================================================
+# === INICIO: VISTA PARA ELIMINAR PIEZA Y RESTAURAR STOCK ===
+# ==========================================================
+@login_required
+@require_POST # Solo permite POST
+def delete_pieza_de_tarea(request, pieza_pk):
+    """
+    Elimina un objeto SalidaArticulo (una pieza) de una tarea.
+    El receiver post_delete del modelo (que ya tienes) se encargará
+    de restaurar el stock automáticamente.
+    """
+    # if not es_admin(request.user): # Puedes activar esta validación
+    #     messages.error(request, "No tiene permiso para esta acción.")
+    #     return redirect('asignar-revision')
+
+    pieza = get_object_or_404(SalidaArticulo, pk=pieza_pk)
+    
+    # Obtenemos la tarea y la asignación ANTES de borrar la pieza
+    # para saber a dónde redirigir al usuario.
+    try:
+        tarea = pieza.content_object # Esto nos da la TareaCorrectiva
+        asignacion = tarea.asignacion
+        redirect_url = f"{reverse('asignar-revision')}?fecha={asignacion.fecha_revision.strftime('%Y-%m-%d')}"
+        
+        # Guardamos los nombres para el mensaje
+        nombre_articulo = pieza.articulo.nombre
+        cantidad_articulo = pieza.cantidad
+
+        # Borramos la pieza. Esto dispara el receiver post_delete.
+        pieza.delete()
+        
+        messages.success(request, f"Éxito: Se eliminó {cantidad_articulo} x {nombre_articulo} y se restauró al inventario.")
+    
+    except Exception as e:
+        messages.error(request, f"Error al eliminar la pieza: {e}")
+        redirect_url = reverse('asignar-revision')
+
+    return redirect(redirect_url)
+# ==========================================================
+# === FIN: VISTA PARA ELIMINAR PIEZA ===
+# ==========================================================
+
+
+# ==========================================================
+# === INICIO: VISTA PARA EL PDF ELABORADO ===
+# ==========================================================
+@login_required
+def download_single_revision_pdf(request, pk):
+    """
+    Genera un PDF "elaborado" con todos los detalles
+    de UNA asignación específica (la del modal).
+    """
+    if not (es_admin(request.user) or es_encargado(request.user)):
+        raise PermissionDenied("No tiene permiso para ver este reporte.")
+    
+    if HTML is None:
+        return HttpResponse("Error: La librería WeasyPrint no está instalada. Contacte al administrador.", status=500)
+
+    # 1. Obtener la Asignación Específica
+    asignacion = get_object_or_404(
+        AsignacionRevision.objects.select_related('unidad').prefetch_related(
+            'tareas_correctivas__usuario_asignado',
+            'tareas_correctivas__piezas__articulo', # <-- ¡Importante para el precio!
+        ), 
+        pk=pk
+    )
+    
+    today = timezone.now().date()
+
+    # 2. Procesar datos (Fallas y lógica de Proceso Completo)
+    
+    # Lógica de Mantenimiento Correctivo (ya precargada)
+    asignacion.tareas_list = asignacion.tareas_correctivas.all()
+    
+    # Lógica de Fallas (Checklist)
+    try:
+        latest_checklist = asignacion.unidad.checklistinspeccion_set.filter(
+            es_dummy=False
+        ).latest('fecha')
+        asignacion.latest_checklist_date = latest_checklist.fecha
+        
+        correccion_items = latest_checklist.correcciones.filter(
+            status='PENDIENTE'
+        ).select_related('corregido_por')
+
+        bad_items_list_temp = []
+        for item in correccion_items:
+            try:
+                label = item.inspeccion._meta.get_field(item.nombre_campo).verbose_name.title()
+            except FieldDoesNotExist:
+                label = item.nombre_campo.replace('_', ' ').title()
+            
+            bad_items_list_temp.append({
+                'id': item.id,
+                'label': label,
+                'obs': item.observacion_original,
+            })
+        asignacion.bad_items_list = bad_items_list_temp
+    except ChecklistInspeccion.DoesNotExist:
+        asignacion.latest_checklist_date = None
+        asignacion.bad_items_list = []
+    
+    # Lógica de Proceso Completo
+    if asignacion.bad_items_list or asignacion.tipo_programacion in ['CORRECTIVO', 'PREVENTIVO']:
+        asignacion.needs_full_process = True
+    elif asignacion.latest_checklist_date is None:
+        asignacion.needs_full_process = True
+    else:
+        dias_desde_ultimo_check = (today - asignacion.latest_checklist_date.date()).days
+        asignacion.needs_full_process = dias_desde_ultimo_check >= 8
+
+    # 3. Renderizar el PDF
+    context = {
+        'asignacion': asignacion, # <-- Pasamos un solo objeto
+        'titulo': f"Reporte de Mantenimiento - {asignacion.unidad.nombre}",
+        'generado_por': request.user.get_full_name() or request.user.username,
+        'fecha_generacion': timezone.now(),
+    }
+    
+    # Usamos la misma plantilla de PDF, pero la modificaremos
+    html_string = render_to_string('flota/reporte_revisiones_pdf.html', context)
+    
+    pdf_file = HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf()
+
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    filename = f"reporte_{asignacion.unidad.nombre.replace(' ', '_')}_{asignacion.fecha_revision.strftime('%Y-%m-%d')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+# ==========================================================
+# === FIN DE LA VISTA PDF ===
+# ==========================================================

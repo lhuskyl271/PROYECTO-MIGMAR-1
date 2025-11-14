@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-g">
+    <title>{{ titulo }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm 1.5cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-size: 10px;
+                color: #555;
+            }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #333;
+        }
+        h1, h2, h3, h4 {
+            font-weight: bold;
+            color: #111;
+            margin-bottom: 0.5em;
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            color: #0d6efd; /* Azul Primario */
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 10px;
+        }
+        h2 {
+            font-size: 18px;
+            color: #333;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+            margin-top: 20px;
+        }
+        h3 {
+            font-size: 16px;
+            color: #444;
+            margin-top: 15px;
+        }
+        h4 {
+            font-size: 14px;
+            color: #555;
+            margin-top: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .header-info {
+            margin-bottom: 20px;
+            font-size: 11px;
+            color: #555;
+        }
+        .header-info table {
+            border-collapse: separate;
+            border-spacing: 5px;
+            width: 100%;
+        }
+        .header-info td {
+            border: none;
+            padding: 2px;
+        }
+        
+        /* Estilos para cada Asignación */
+        .asignacion-card {
+            page-break-inside: avoid; /* Evita que la tarjeta se parta entre páginas */
+            border: 1px solid #0d6efd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden; /* Para que el radio funcione */
+        }
+        .asignacion-header {
+            background-color: #e7f0ff; /* Azul claro */
+            padding: 12px;
+            border-bottom: 1px solid #0d6efd;
+        }
+        .asignacion-header h2 {
+            margin: 0;
+            padding: 0;
+            border: none;
+            font-size: 20px;
+            color: #0d6efd;
+        }
+        .asignacion-body {
+            padding: 12px;
+        }
+        
+        /* Detalles dentro de la tarjeta */
+        .details-grid {
+            display: -weasy-flex; /* Flexbox para WeasyPrint */
+            -weasy-flex-wrap: wrap;
+        }
+        .detail-item {
+            -weasy-flex: 1 1 50%; /* Dos columnas */
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .detail-item strong {
+            color: #333;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 12px;
+            color: #fff;
+        }
+        .badge-danger { background-color: #dc3545; }
+        .badge-info { background-color: #0dcaf0; }
+        .badge-success { background-color: #198754; }
+        .badge-warning { background-color: #ffc107; color: #000; }
+        .badge-secondary { background-color: #6c757d; }
+
+    </style>
+</head>
+<body>
+    <h1>{{ titulo }}</h1>
+    
+    <div class="header-info">
+        <table>
+            <tr>
+                <td><strong>Fecha del Reporte:</strong></td>
+                <td>{{ fecha_filtro|date:"d M, Y" }}</td>
+                <td><strong>Generado por:</strong></td>
+                <td>{{ generado_por }}</td>
+            </tr>
+            <tr>
+                <td><strong>Total de Asignaciones:</strong></td>
+                <td>{{ asignaciones|length }}</td>
+                <td><strong>Fecha de Generación:</strong></td>
+                <td>{{ fecha_generacion|date:"d M, Y H:i" }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% for asignacion in asignaciones %}
+    <div class="asignacion-card">
+        <div class="asignacion-header">
+            <h2>Unidad: {{ asignacion.unidad.nombre }}</h2>
+        </div>
+        <div class="asignacion-body">
+            
+            <div class="details-grid">
+                <div class="detail-item">
+                    <strong>Tipo:</strong> 
+                    {% if asignacion.tipo_programacion == 'CORRECTIVO' %}
+                        <span class="badge badge-danger">Correctivo</span>
+                    {% elif asignacion.tipo_programacion == 'PREVENTIVO' %}
+                        <span class="badge badge-info">Preventivo</span>
+                    {% else %}
+                        <span class="badge badge-secondary">Normal</span>
+                    {% endif %}
+                </div>
+                <div class="detail-item">
+                    <strong>Estado Taller:</strong> 
+                    {% if asignacion.needs_full_process %}
+                        <span class="badge badge-secondary">Proceso Completo</span>
+                    {% else %}
+                        <span class="badge badge-success">Mandar a Diesel</span>
+                    {% endif %}
+                </div>
+                <div class="detail-item">
+                    <strong>Último Checklist:</strong> 
+                    {{ asignacion.latest_checklist_date|date:"d M, Y"|default:"N/A" }}
+                </div>
+                <div class="detail-item">
+                    <strong>Estado Asignación:</strong> {{ asignacion.get_status_display }}
+                </div>
+            </div>
+
+            {% if asignacion.tareas_list %}
+                <h3>Tareas de M. Correctivo</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descripción de la Tarea</th>
+                            <th>Asignado a</th>
+                            <th>Fecha Límite</th>
+                            <th>Estado</th>
+                            <th>Piezas Asignadas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tarea in asignacion.tareas_list %}
+                        <tr>
+                            <td>{{ tarea.refaccion }}</td>
+                            <td>{{ tarea.usuario_asignado.username|default:"N/A" }}</td>
+                            <td>{{ tarea.fecha_limite|date:"d M, Y"|default:"N/A" }}</td>
+                            <td>{{ tarea.get_status_display }}</td>
+                            <td>
+                                {% if tarea.piezas.all %}
+                                    <ul>
+                                        {% for pieza in tarea.piezas.all %}
+                                            <li>{{ pieza.cantidad }} x {{ pieza.articulo.nombre }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    Sin piezas
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+
+            {% if asignacion.bad_items_list %}
+                <h3>Fallas de Checklist Pendientes</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Componente</th>
+                            <th>Observación del Técnico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in asignacion.bad_items_list %}
+                        <tr>
+                            <td>{{ item.label }}</td>
+                            <td>{{ item.obs|default:"Sin observación." }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+            
+            {% if not asignacion.tareas_list and not asignacion.bad_items_list %}
+                <p style="color: #555; font-style: italic; margin-top: 10px;">Esta unidad no tiene tareas correctivas ni fallas de checklist pendientes.</p>
+            {% endif %}
+
+        </div>
+    </div>
+    {% empty %}
+        <p>No se encontraron asignaciones para esta fecha.</p>
+    {% endfor %}
+
+</body>
+</html>

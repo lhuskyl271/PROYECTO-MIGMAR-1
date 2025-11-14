@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth.models import User, Group # ¡Añade Group!
 from django.contrib.contenttypes.fields import GenericRelation
+from django.db.models import F # ¡Asegúrate de importar F!
 
 # ===================================================================
 # 1. MODELOS PRINCIPALES (SIN DEPENDENCIAS)
