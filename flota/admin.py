@@ -10,7 +10,7 @@ from .models import (
     CompraSuministro,
     ChecklistInspeccion,
     
-    # --- INICIO: IMPORTACIONES AÑADIDAS ---
+    # --- IMPORTACIONES AÑADIDAS ---
     LlantasInspeccion,
     LlantaDetalle,
     ProcesoCarga,
@@ -20,45 +20,23 @@ from .models import (
     ChecklistCorreccion,
     EntregaSuministros,
     TareaCorrectiva,
-    # --- FIN: IMPORTACIONES AÑADIDAS ---
 )
 
 # =================================================================
-# --- CONFIGURACIÓN PARA INSPECCIÓN DE LLANTAS (LO QUE PEDISTE) ---
+# --- CONFIGURACIÓN PARA INSPECCIÓN DE LLANTAS ---
 # =================================================================
 
 class LlantaDetalleInline(admin.TabularInline):
-    """
-    Esto permite editar los 'LlantaDetalle' (las posiciones 1-6)
-    DENTRO del formulario de 'LlantasInspeccion'.
-    """
     model = LlantaDetalle
-    # Campos que se mostrarán en la tabla de edición
     fields = ['posicion', 'mm', 'marca', 'modelo', 'medida', 'presion']
-    
-    # 'extra' controla cuántas filas vacías se muestran.
-    # 0 es bueno para editar. 6 es bueno si quieres forzar 6 al crear.
     extra = 0 
 
 @admin.register(LlantasInspeccion)
 class LlantasInspeccionAdmin(admin.ModelAdmin):
-    """
-    Configuración principal para el modelo 'LlantasInspeccion'.
-    """
-    # Columnas que se verán en la lista de inspecciones
     list_display = ('unidad', 'fecha', 'tecnico', 'km', 'es_dummy')
-    
-    # Filtros que aparecerán a la derecha
     list_filter = ('fecha', 'es_dummy', 'tecnico')
-    
-    # Campos de búsqueda
     search_fields = ('unidad__nombre', 'tecnico__username')
-    
-    # ¡La parte más importante!
-    # Conecta el inline de 'LlantaDetalle'
     inlines = [LlantaDetalleInline]
-    
-    # Optimización para los campos de búsqueda (ForeignKey)
     autocomplete_fields = ['unidad', 'tecnico']
 
 # =================================================================
@@ -69,7 +47,7 @@ class LlantasInspeccionAdmin(admin.ModelAdmin):
 class UnidadAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'marca', 'modelo', 'placas', 'tipo', 'km_actual')
     list_filter = ('tipo', 'marca', 'unidad_negocio')
-    search_fields = ('nombre', 'placas', 'vin', 'modelo')
+    search_fields = ('nombre', 'placas', 'vin', 'modelo') # <--- Este ya estaba bien
 
 @admin.register(CargaDiesel)
 class CargaDieselAdmin(admin.ModelAdmin):
@@ -77,23 +55,51 @@ class CargaDieselAdmin(admin.ModelAdmin):
     list_filter = ('unidad',)
     date_hierarchy = 'fecha'
     autocomplete_fields = ['unidad', 'operador']
+    
+    # --- INICIO DE LA CORRECCIÓN 1 ---
+    # Necesitamos esto para que otros modelos (como ProcesoCarga)
+    # puedan buscar Cargas de Diésel.
+    search_fields = ('unidad__nombre', 'operador__nombre', 'fecha')
+    # --- FIN DE LA CORRECCIÓN 1 ---
 
 @admin.register(CompraSuministro)
 class CompraSuministroAdmin(admin.ModelAdmin):
     list_display = ('fecha_compra', 'tipo_suministro', 'proveedor', 'cantidad', 'precio_por_litro', 'precio')
     list_filter = ('tipo_suministro', 'proveedor')
     date_hierarchy = 'fecha_compra'
+    search_fields = ('proveedor', 'tipo_suministro') # Añadido por buena práctica
 
 @admin.register(ChecklistInspeccion)
 class ChecklistInspeccionAdmin(admin.ModelAdmin):
     list_display = ('unidad', 'operador', 'tecnico', 'fecha', 'es_dummy')
     list_filter = ('fecha', 'es_dummy', 'tecnico')
-    search_fields = ('unidad__nombre', 'operador__nombre')
+    # Este 'search_fields' ya estaba, y es necesario para 'autocomplete_fields'
+    search_fields = ('unidad__nombre', 'operador__nombre', 'tecnico__username')
     autocomplete_fields = ['unidad', 'operador', 'tecnico']
 
 # =================================================================
 # --- REGISTROS NUEVOS (PARA QUE TENGAS TODO EL ADMIN COMPLETO) ---
 # =================================================================
+
+# --- INICIO DE LA CORRECCIÓN 2 ---
+# 'Operador' necesita su propio Admin con 'search_fields'
+# porque CargaDieselAdmin y ChecklistInspeccionAdmin lo usan en 'autocomplete_fields'
+@admin.register(Operador)
+class OperadorAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'apellido')
+    search_fields = ('nombre', 'apellido')
+# --- FIN DE LA CORRECCIÓN 2 ---
+
+# --- INICIO DE LA CORRECCIÓN 3 ---
+# 'CargaUrea' necesita su propio Admin con 'search_fields'
+# porque ProcesoCargaAdmin lo usa en 'autocomplete_fields'
+@admin.register(CargaUrea)
+class CargaUreaAdmin(admin.ModelAdmin):
+    list_display = ('unidad', 'fecha', 'litros_cargados', 'costo')
+    list_filter = ('fecha', 'unidad')
+    search_fields = ('unidad__nombre', 'fecha')
+    autocomplete_fields = ['unidad']
+# --- FIN DE LA CORRECCIÓN 3 ---
 
 class TareaCorrectivaInline(admin.TabularInline):
     model = TareaCorrectiva
@@ -113,8 +119,16 @@ class AsignacionRevisionAdmin(admin.ModelAdmin):
 class ProcesoCargaAdmin(admin.ModelAdmin):
     list_display = ('unidad', 'fecha_inicio', 'fecha_fin', 'tecnico_inicia', 'encargado_finaliza', 'status')
     list_filter = ('status', 'fecha_inicio')
-    search_fields = ('unidad__nombre',)
-    autocomplete_fields = ['unidad', 'tecnico_inicia', 'encargado_finaliza', 'checklist', 'inspeccion_llantas', 'carga_diesel', 'carga_urea']
+    search_fields = ('unidad__nombre', 'tecnico_inicia__username', 'encargado_finaliza__username')
+    autocomplete_fields = [
+        'unidad', 
+        'tecnico_inicia', 
+        'encargado_finaliza', 
+        'checklist', 
+        'inspeccion_llantas', 
+        'carga_diesel', 
+        'carga_urea'
+    ]
 
 @admin.register(ChecklistCorreccion)
 class ChecklistCorreccionAdmin(admin.ModelAdmin):
@@ -124,10 +138,9 @@ class ChecklistCorreccionAdmin(admin.ModelAdmin):
     autocomplete_fields = ['inspeccion', 'corregido_por']
 
 # Registros simples (los que no necesitan configuración especial)
-admin.site.register(Operador)
+# (Operador y CargaUrea se movieron arriba para convertirlos en @admin.register)
 admin.site.register(CargaAceite)
-admin.site.register(CargaUrea)
 admin.site.register(AjusteInventario)
 admin.site.register(AlertaInventario)
 admin.site.register(EntregaSuministros)
-admin.site.register(TareaCorrectiva) # También se puede registrar por sí solo
+admin.site.register(TareaCorrectiva)
