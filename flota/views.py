@@ -2405,7 +2405,7 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
         # Pasamos la lista de artículos del inventario al contexto
         # para usarla en el dropdown del modal.
         # (Asegúrate de importar 'Articulo' de 'almacen.models')
-        context['lista_articulos_inventARIO'] = Articulo.objects.filter(
+        context['lista_articulos_inventario'] = Articulo.objects.filter(
             stock_total__gt=0
         ).order_by(
             'subcategoria__categoria__nombre', 'subcategoria__nombre', 'nombre'
