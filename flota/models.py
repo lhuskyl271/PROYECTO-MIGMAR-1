@@ -331,7 +331,15 @@ class LlantasInspeccion(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name='inspecciones_llantas')
     tecnico = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    km = models.PositiveIntegerField(verbose_name="Kilometraje en Inspección")
+    
+    # --- INICIO DE LA MODIFICACIÓN ---
+    km = models.PositiveIntegerField(
+        verbose_name="Kilometraje en Inspección",
+        null=True,  # <-- AÑADIR ESTA LÍNEA
+        blank=True  # <-- AÑADIR ESTA LÍNEA
+    )
+    # --- FIN DE LA MODIFICACIÓN ---
+    
     es_dummy = models.BooleanField(default=False, verbose_name="Es un registro 'Solo Carga'")
 
     def __str__(self):

@@ -404,10 +404,14 @@ class ChecklistInspeccionForm(forms.ModelForm):
                 
 class LlantasKmForm(forms.Form):
     """Formulario para capturar y validar el kilometraje de la unidad."""
+    
+    # --- INICIO DE LA MODIFICACIÓN 1 ---
     km = forms.IntegerField(
         label="Kilometraje de la Unidad",
-        widget=forms.NumberInput(attrs={'class': 'form-control'})
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        required=False  # <-- AÑADIR ESTA LÍNEA
     )
+    # --- FIN DE LA MODIFICACIÓN 1 ---
 
     def __init__(self, *args, **kwargs):
         # Esta parte está bien, se usa para la validación
@@ -416,29 +420,36 @@ class LlantasKmForm(forms.Form):
         super().__init__(*args, **kwargs)
         
     # ==================================================
-    # === BLOQUE DE VALIDACIÓN AÑADIDO ===
+    # === INICIO DE LA MODIFICACIÓN 2 ===
     # ==================================================
-    def clean_km(self):
-        km_actual_form = self.cleaned_data.get('km')
-        
-        if not self.unidad:
-            return km_actual_form # No podemos validar sin la unidad
-
-        # Buscamos la última carga de DIÉSEL, que es la que marca el KM más fiable
-        ultima_carga_diesel = CargaDiesel.objects.filter(unidad=self.unidad).order_by('-fecha').first()
-        
-        if ultima_carga_diesel:
-            is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
-            
-            if not is_admin:
-                if km_actual_form is not None and km_actual_form <= ultima_carga_diesel.km_actual:
-                    # Lanzamos el mismo error, pero ahora en el formulario de Llantas
-                    raise ValidationError(
-                        f"El kilometraje debe ser mayor al último registrado en Diésel ({ultima_carga_diesel.km_actual} km).",
-                        code='invalid_km'
-                    )
-                            
-        return km_actual_form
+    #
+    # --- ELIMINA O COMENTA TODO EL MÉTODO 'clean_km' ---
+    #
+    # def clean_km(self):
+    #     km_actual_form = self.cleaned_data.get('km')
+    #     
+    #     if not self.unidad:
+    #         return km_actual_form # No podemos validar sin la unidad
+    #
+    #     # Buscamos la última carga de DIÉSEL, que es la que marca el KM más fiable
+    #     ultima_carga_diesel = CargaDiesel.objects.filter(unidad=self.unidad).order_by('-fecha').first()
+    #     
+    #     if ultima_carga_diesel:
+    #         is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
+    #         
+    #         if not is_admin:
+    #             if km_actual_form is not None and km_actual_form <= ultima_carga_diesel.km_actual:
+    #                 # Lanzamos el mismo error, pero ahora en el formulario de Llantas
+    #                 raise ValidationError(
+    #                     f"El kilometraje debe ser mayor al último registrado en Diésel ({ultima_carga_diesel.km_actual} km).",
+    #                     code='invalid_km'
+    #                 )
+    #                         
+    #     return km_actual_form
+    #
+    # ==================================================
+    # === FIN DE LA MODIFICACIÓN 2 ===
+    # ==================================================
 
 class LlantasInspeccionForm(forms.ModelForm):
     """Formulario para la cabecera de la inspección de llantas (Admin)."""
