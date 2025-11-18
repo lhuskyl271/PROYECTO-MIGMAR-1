@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'mantenimiento', # App de mantenimiento
     'crispy_forms',
     'crispy_bootstrap5',  # Solo si instalaste el pack Bootstrap 5
+    'RH',
 ]
 
 MIDDLEWARE = [

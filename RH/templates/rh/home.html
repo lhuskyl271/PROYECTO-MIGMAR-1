@@ -1,0 +1,423 @@
+{# RH/templates/rh/home.html #}
+{% extends 'rh/base.html' %}
+{% load humanize %}
+
+{% block rh_title %}Panel Ejecutivo{% endblock %}
+
+{% block rh_content %}
+<style>
+    :root {
+        --rh-primary: #2c3e50;       /* Azul Marino Oscuro */
+        --rh-secondary: #34495e;     /* Gris Pizarra */
+        --rh-accent: #3498db;        /* Azul Brillante */
+        --rh-success: #27ae60;       /* Verde Esmeralda */
+        --rh-warning: #f39c12;       /* Naranja Suave */
+        --rh-danger: #e74c3c;        /* Rojo Suave */
+        --rh-light: #f8f9fa;         /* Blanco Humo */
+        --rh-card-bg: #ffffff;
+    }
+
+    .text-primary-custom { color: var(--rh-primary) !important; }
+    .bg-primary-custom { background-color: var(--rh-primary) !important; }
+    .bg-primary-subtle { background-color: rgba(44, 62, 80, 0.1) !important; }
+    
+    /* Gradientes Superiores */
+    .gradient-card-1 { background: linear-gradient(135deg, #ffffff 0%, #f1f2f6 100%); border-left: 4px solid var(--rh-primary); }
+    .gradient-card-2 { background: linear-gradient(135deg, #ffffff 0%, #f1f2f6 100%); border-left: 4px solid var(--rh-success); }
+    .gradient-card-3 { background: linear-gradient(135deg, #2980b9 0%, #2c3e50 100%); color: white; } /* Migmar Style */
+    .gradient-card-4 { background: linear-gradient(135deg, #34495e 0%, #000000 100%); color: white; } /* Marco Morales Style */
+
+    /* Efectos */
+    .hover-scale { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .hover-scale:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important; }
+    
+    .icon-circle {
+        width: 45px; height: 45px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 12px;
+        font-size: 1.2rem;
+    }
+
+    /* Accesos Rápidos Grid */
+    .quick-action-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+        transition: all 0.2s;
+        height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-decoration: none; /* Asegura que no haya subrayado */
+    }
+    .quick-action-card:hover {
+        border-color: var(--rh-accent);
+        background-color: #fbfdff;
+        text-decoration: none;
+    }
+    .quick-action-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .quick-action-text { font-size: 0.8rem; font-weight: 600; color: var(--rh-secondary); line-height: 1.2; }
+    
+    /* Scrollbar */
+    .thin-scroll::-webkit-scrollbar { width: 5px; }
+    .thin-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+    .thin-scroll::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    
+    .pointer-events-none { pointer-events: none; }
+</style>
+
+<div class="dashboard-container pb-5">
+    
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <small class="text-uppercase text-muted fw-bold ls-1">Transportes Migmar &bull; Portal Corporativo</small>
+            <h2 class="fw-bold text-primary-custom mb-0">Dashboard Recursos Humanos</h2>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <div class="d-inline-block px-3 py-2 bg-white rounded-pill shadow-sm border">
+                <i class="far fa-calendar-alt text-primary-custom me-2"></i>
+                <span class="fw-bold text-dark">{{ today|date:"l, d F Y"|capfirst }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100 gradient-card-1 hover-scale">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-black small fw-bold">Plantilla Total</h6>
+                            <h2 class="display-6 fw-bold text-black mb-0">{{ total_empleados|default:0 }}</h2>
+                        </div>
+                        <div class="icon-circle bg-primary-subtle text-primary-custom">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2 small text-muted">
+                        <i class="fas fa-layer-group me-1"></i> {{ total_departamentos }} Departamentos
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100 gradient-card-2 hover-scale">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Personal Activo</h6>
+                            <h2 class="display-6 fw-bold text-success mb-0">{{ empleados_activos|default:0 }}</h2>
+                        </div>
+                        <div class="icon-circle bg-success-subtle text-success">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-success fw-bold">{{ empleados_activos_porcentaje }}%</span>
+                            <span class="text-muted">Operatividad</span>
+                        </div>
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar bg-success" style="width: {{ empleados_activos_porcentaje|stringformat:'d' }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100 gradient-card-3 hover-scale border-0">
+                <div class="card-body position-relative overflow-hidden">
+                    <div class="position-relative z-1">
+                        <h6 class="text-white-50 text-uppercase small fw-bold">Operadores Migmar</h6>
+                        <h2 class="display-6 fw-bold text-white mb-0">{{ operadores_migmar|default:0 }}</h2>
+                        <div class="mt-2 small text-white-50">Unidades Activas</div>
+                    </div>
+                    <i class="fas fa-truck-moving position-absolute text-white opacity-10" style="font-size: 4rem; bottom: -5px; right: 10px;"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="card shadow-sm h-100 gradient-card-4 hover-scale border-0">
+                <div class="card-body position-relative overflow-hidden">
+                    <div class="position-relative z-1">
+                        <h6 class="text-white-50 text-uppercase small fw-bold">Ops. Marco Morales</h6>
+                        <h2 class="display-6 fw-bold text-white mb-0">{{ operadores_marco|default:0 }}</h2>
+                        <div class="mt-2 small text-white-50">Unidades Activas</div>
+                    </div>
+                    <i class="fas fa-road position-absolute text-white opacity-10" style="font-size: 4rem; bottom: -5px; right: 10px;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="fw-bold m-0 text-dark"><i class="fas fa-th me-2 text-primary"></i>Centro de Comando</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-4 col-lg-3"> 
+                            <a href="{% url 'rh:importar_empleados' %}" class="quick-action-card hover-scale border-primary bg-primary-subtle">
+                                <div class="quick-action-icon text-primary"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <div class="quick-action-text">Importar<br>Masivo</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> 
+                            <a href="{% url 'rh:export_empleados_excel' %}" class="quick-action-card hover-scale border-success bg-success-subtle">
+                                <div class="quick-action-icon text-success"><i class="fas fa-file-excel"></i></div>
+                                <div class="quick-action-text">Exportar<br>Excel</div>
+                            </a>
+                        </div>
+                        
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:empleado_create' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-primary"><i class="fas fa-user-plus"></i></div>
+                                <div class="quick-action-text">Nuevo<br>Empleado</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:lista_empleados' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-dark"><i class="fas fa-address-book"></i></div>
+                                <div class="quick-action-text">Directorio<br>General</div>
+                            </a>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:semaforo_documentos' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-warning"><i class="fas fa-traffic-light"></i></div>
+                                <div class="quick-action-text">Semáforo<br>Vencimientos</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:reporte_documentacion_operador' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-secondary"><i class="fas fa-folder-open"></i></div>
+                                <div class="quick-action-text">Faltantes<br>Operador</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:vacantes_dashboard' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-info"><i class="fas fa-chair"></i></div>
+                                <div class="quick-action-text">Gestión<br>Vacantes</div>
+                            </a>
+                        </div>
+                         <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:dashboard_operadores' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-primary"><i class="fas fa-tachometer-alt"></i></div>
+                                <div class="quick-action-text">Dashboard<br>Operativo</div>
+                            </a>
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:lista_departamentos' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-muted"><i class="fas fa-sitemap"></i></div>
+                                <div class="quick-action-text">Deptos.<br>y Puestos</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:reporte_bajas' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-danger"><i class="fas fa-user-times"></i></div>
+                                <div class="quick-action-text">Reporte<br>Bajas</div>
+                            </a>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-3"> <a href="{% url 'rh:cumpleanos_rh' %}" class="quick-action-card hover-scale">
+                                <div class="quick-action-icon text-danger"><i class="fas fa-birthday-cake"></i></div>
+                                <div class="quick-action-text">Calendario<br>Cumpleaños</div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold m-0 text-dark">Distribución de Personal</h6>
+                            <span class="badge bg-primary-subtle text-primary">
+                                Total: {{ total_empleados }}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center h-100">
+                                <div class="col-md-5 mb-3 mb-md-0 position-relative">
+                                    <div style="height: 220px;">
+                                        <canvas id="deptChart"></canvas>
+                                    </div>
+                                    <div class="position-absolute top-50 start-50 translate-middle text-center pointer-events-none">
+                                        <div class="h3 fw-bold text-dark mb-0">{{ total_departamentos }}</div>
+                                        <div class="small text-muted text-uppercase" style="font-size: 0.65rem;">Deptos</div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-7">
+                                    <div class="thin-scroll pe-2" style="max-height: 240px; overflow-y: auto;">
+                                        {% if departamento_distribucion %}
+                                            <table class="table table-sm table-borderless align-middle mb-0">
+                                                <thead class="text-muted small text-uppercase border-bottom sticky-top bg-white">
+                                                    <tr>
+                                                        <th class="fw-normal pb-2">Departamento</th>
+                                                        <th class="fw-normal pb-2 text-end">Cant.</th>
+                                                        <th class="fw-normal pb-2 text-end">%</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for dept in departamento_distribucion %}
+                                                    <tr class="border-bottom border-light">
+                                                        <td class="py-2">
+                                                            <div class="d-flex align-items-center">
+                                                                <span class="rounded-circle me-2 shadow-sm" 
+                                                                    style="width: 12px; height: 12px; background-color: {% cycle '#3498db' '#2ecc71' '#9b59b6' '#f1c40f' '#e74a3b' '#34495e' '#95a5a6' '#e67e22' '#1abc9c' '#2c3e50' %};">
+                                                                </span>
+                                                                <span class="fw-bold text-secondary small text-truncate" style="max-width: 140px;" title="{{ dept.nombre }}">
+                                                                    {{ dept.nombre }}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-end py-2">
+                                                            <span class="fw-bold text-dark">{{ dept.count }}</span>
+                                                        </td>
+                                                        <td class="text-end py-2 text-muted small">
+                                                            {% widthratio dept.count total_empleados 100 %}%
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        {% else %}
+                                            <div class="text-center py-5 text-muted">
+                                                <i class="fas fa-users-slash fa-2x mb-2 opacity-50"></i>
+                                                <p class="small">No hay empleados activos.</p>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4">
+                    <div class="card border-0 shadow-sm h-100 bg-primary text-white" style="background: linear-gradient(160deg, #3498db 0%, #2980b9 100%);">
+                        <div class="card-body d-flex flex-column">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-birthday-cake fa-3x text-white opacity-50 mb-2"></i>
+                                <h5 class="fw-bold">Hoy, {{ today|date:"d M" }}</h5>
+                            </div>
+                            
+                            <div class="bg-white bg-opacity-10 rounded p-3 flex-grow-1 thin-scroll" style="overflow-y: auto; max-height: 200px;">
+                                {% if cumpleanos_hoy %}
+                                    {% for item in cumpleanos_hoy %}
+                                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom border-light border-opacity-25 last-no-border">
+                                            <div class="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold me-3" style="width:35px; height:35px; min-width:35px;">
+                                                {{ item.empleado.nombre|slice:":1" }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold lh-1">{{ item.empleado.nombre }} {{ item.empleado.apellido }}</div>
+                                                <small class="opacity-75">{{ item.edad_a_cumplir }} Años</small>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center h-100 d-flex align-items-center justify-content-center opacity-75">
+                                        <small>No hay cumpleaños registrados hoy.</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <a href="{% url 'rh:cumpleanos_rh' %}" class="btn btn-sm btn-light text-primary w-100 mt-3 fw-bold shadow-sm">Ver Mes Completo</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-bottom py-3 sticky-top bg-white z-1">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold m-0 text-dark">Alertas y Tareas</h6>
+                        {% if alertas_rh %}
+                            <span class="badge bg-danger rounded-pill">{{ alertas_rh|length }}</span>
+                        {% else %}
+                             <span class="badge bg-success rounded-pill"><i class="fas fa-check"></i></span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body p-0 thin-scroll" style="max-height: 600px; overflow-y: auto;">
+                    {% if alertas_rh %}
+                        <div class="list-group list-group-flush">
+                            {% for alerta in alertas_rh %}
+                            <div class="list-group-item border-0 py-3 px-4 border-bottom list-group-item-action">
+                                <div class="d-flex">
+                                    <div class="me-3 mt-1">
+                                        {% if alerta.tipo == 'danger' %}
+                                            <div class="icon-circle bg-danger-subtle text-danger" style="width:35px; height:35px; font-size:1rem;"><i class="fas fa-exclamation-triangle"></i></div>
+                                        {% elif alerta.tipo == 'warning' %}
+                                            <div class="icon-circle bg-warning-subtle text-warning" style="width:35px; height:35px; font-size:1rem;"><i class="fas fa-clock"></i></div>
+                                        {% else %}
+                                            <div class="icon-circle bg-info-subtle text-info" style="width:35px; height:35px; font-size:1rem;"><i class="fas fa-info-circle"></i></div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <strong class="text-dark font-size-sm">{{ alerta.titulo }}</strong>
+                                            <span class="badge bg-light text-muted border" style="font-size: 0.7rem;">{{ alerta.fecha|date:"d/m" }}</span>
+                                        </div>
+                                        <p class="text-muted small mb-0 lh-sm">{{ alerta.descripcion }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 px-4">
+                            <div class="mb-3 text-success opacity-25">
+                                <i class="fas fa-clipboard-check fa-4x"></i>
+                            </div>
+                            <h6 class="text-muted fw-bold">¡Todo al día!</h6>
+                            <p class="small text-muted">No hay contratos por vencer, documentos caducados ni vacantes pendientes urgentes.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('deptChart').getContext('2d');
+    const palette = ['#3498db', '#2ecc71', '#9b59b6', '#f1c40f', '#e74a3b', '#34495e', '#95a5a6', '#e67e22', '#1abc9c', '#2c3e50'];
+
+    const data = {
+        labels: [{% for dept in departamento_distribucion %}"{{ dept.nombre }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+        datasets: [{
+            data: [{% for dept in departamento_distribucion %}{{ dept.count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+            backgroundColor: palette,
+            borderWidth: 0, hoverOffset: 5
+        }]
+    };
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: data,
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '75%', 
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(44, 62, 80, 0.9)', padding: 12, cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            let value = context.raw;
+                            let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            let percentage = total > 0 ? Math.round((value / total) * 100) + '%' : '0%';
+                            return context.label + ': ' + value + ' (' + percentage + ')';
+                        }
+                    }
+                }
+            }, layout: { padding: 0 }
+        }
+    });
+});
+</script>
+{% endblock %}

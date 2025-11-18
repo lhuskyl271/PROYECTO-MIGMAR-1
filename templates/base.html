@@ -1,376 +1,262 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestión de Transporte</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>{% block title %}Sistema de Gestión de Transporte - MIGMAR{% endblock %}</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
     <style>
+        /* --- ESTILOS UNIFICADOS (ESTILO TRANSPORTE) --- */
         :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --primary-light: #dbeafe;
-            --secondary: #f59e0b;
-            --secondary-dark: #d97706;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --dark: #1e293b;
-            --darker: #0f172a;
-            --light: #f8fafc;
-            --lighter: #ffffff;
-            --gray: #64748b;
-            --gray-light: #e2e8f0;
-            --transition: all 0.3s ease;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --light-color: #f8f9fa;
+            --text-color: #34495e;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --hover-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --success-color: #2ecc71;
             --border-radius: 10px;
-            --border-radius-lg: 15px;
+            --dark-color: #2c3e50;
+            --gray-color: #6c757d;
         }
-        
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-            color: #334155;
-            line-height: 1.6;
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+            color: var(--dark-color);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        
-        /* ===== NAVBAR ===== */
+
+        /* Navbar con gradiente estilo Transporte */
         .navbar {
-            background: linear-gradient(135deg, var(--dark) 0%, var(--darker) 100%);
-            box-shadow: var(--shadow-xl);
-            padding: 0.5rem 0;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 0.5rem 1rem;
         }
-        
+
         .navbar-brand {
             font-weight: 700;
-            font-size: 1.3rem;
-            color: white;
+            font-size: 1.4rem;
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 0.3rem 0;
-            letter-spacing: -0.5px;
+            color: white !important;
         }
-        
+
         .navbar-brand .logo-img {
-            height: 50px;
-            width: auto;
+            margin-right: 12px;
             border-radius: 8px;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15), 0 4px 8px rgba(0, 0, 0, 0.2);
-            background: rgba(255, 255, 255, 0.1);
-            padding: 3px;
+            background: white;
+            padding: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            height: 45px;
+            width: auto;
+            transition: transform 0.3s ease;
         }
         
-        .navbar-brand .logo-img:hover {
-            transform: scale(1.08);
-            box-shadow: 0 0 0 3px var(--secondary), 0 6px 12px rgba(0, 0, 0, 0.25);
+        .navbar-brand:hover .logo-img {
+            transform: scale(1.05);
         }
 
         .navbar-nav .nav-link {
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.9) !important;
             font-weight: 500;
-            padding: 0.5rem 1rem;
-            margin: 0 0.1rem;
-            border-radius: var(--border-radius);
-            transition: var(--transition);
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-        
-        .navbar-nav .nav-link:hover {
-            color: white;
-            background: rgba(255, 255, 255, 0.12);
-            transform: translateY(-1px);
-        }
-        
-        .navbar-nav .nav-link.active {
-            color: white;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
-        }
-        
-        .navbar-nav .nav-link.active:after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 1rem;
-            right: 1rem;
-            height: 2px;
-            background: var(--secondary);
-            border-radius: 2px;
-        }
-        
-        .dropdown-menu {
-            background: var(--lighter);
-            border: none;
-            box-shadow: var(--shadow-xl);
-            border-radius: var(--border-radius);
-            padding: 0.5rem 0;
-            margin-top: 0.5rem;
-            border: 1px solid var(--gray-light);
-            min-width: 200px;
-        }
-        
-        .dropdown-item {
-            padding: 0.6rem 1.2rem;
-            font-weight: 500;
-            color: var(--dark);
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border-left: 3px solid transparent;
-        }
-        
-        .dropdown-item:hover {
-            background-color: var(--primary-light);
-            color: var(--primary-dark);
-            border-left-color: var(--primary);
-            transform: translateX(3px);
-        }
-        
-        .dropdown-item i {
-            width: 16px;
-            text-align: center;
-            color: var(--gray);
-        }
-        
-        .dropdown-item:hover i {
-            color: var(--primary);
-        }
-        
-        .navbar-text {
-            color: rgba(255, 255, 255, 0.9);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-        }
-        
-        .navbar-text a, .navbar-text button.btn-link {
-            color: var(--secondary);
-            text-decoration: none;
-            font-weight: 500;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .navbar-text a:hover, .navbar-text button.btn-link:hover {
-            color: white;
-            text-decoration: none;
-            transform: translateY(-1px);
-        }
-        
-        .user-badge {
-            display: inline-flex;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.12);
-            padding: 5px 10px;
-            border-radius: 50px;
-            font-size: 0.85rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: var(--transition);
-        }
-        
-        .user-badge:hover {
-            background: rgba(255, 255, 255, 0.18);
-            transform: translateY(-1px);
-        }
-        
-        .user-badge i {
-            margin-right: 6px;
-            color: var(--secondary);
-        }
-        
-        .badge {
-            font-size: 0.65rem;
-            padding: 3px 6px;
-        }
-        
-        /* ===== MAIN CONTENT ===== */
-        main {
-            flex: 1;
-            padding: 1.5rem 0;
-        }
-        
-        .container-fluid {
-             max-width: 1600px;
-        }
-        
-        /* ===== FOOTER ===== */
-        footer {
-            background: linear-gradient(135deg, var(--dark) 0%, var(--darker) 100%);
-            color: rgba(255, 255, 255, 0.75);
-            padding: 1.5rem 0;
-            margin-top: 2rem;
-            font-size: 0.85rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.7rem 1rem;
+            border-radius: 6px;
+            margin: 0 2px;
+            transition: all 0.3s ease;
         }
 
-        .footer-content {
+        .navbar-nav .nav-link:hover,
+        .navbar-nav .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
+        }
+
+        .navbar-nav .nav-link i {
+            margin-right: 6px;
+        }
+
+        /* Dropdowns estilo Transporte */
+        .dropdown-menu {
+            border-radius: 8px;
+            border: none;
+            box-shadow: var(--card-shadow);
+            padding: 0.5rem 0;
+            margin-top: 10px;
+            background-color: #fff;
+        }
+
+        .dropdown-item {
+            padding: 0.6rem 1.5rem;
+            font-weight: 500;
+            color: var(--dark-color);
+            transition: all 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .dropdown-header {
+            color: var(--secondary-color);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            padding: 0.5rem 1.5rem;
+        }
+
+        /* Layout Principal */
+        .container-fluid {
+            padding-left: 25px;
+            padding-right: 25px;
+        }
+
+        .main-container {
+            margin-top: 30px;
+            margin-bottom: 40px;
+            flex: 1;
+        }
+
+        /* Tarjetas (Cards) Consistentes */
+        .card {
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            margin-bottom: 25px;
+            background-color: white;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--hover-shadow);
+        }
+
+        .card-header {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            color: white;
+            font-weight: 600;
+            padding: 1rem 1.5rem;
+            border: none;
+        }
+        
+        .card-header h1, .card-header h2, .card-header h3, .card-header h4, .card-header h5 {
+            margin: 0;
+            color: white;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Botones Estilizados */
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.5rem 1.2rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            background: #1a252f; /* Darker shade of primary */
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(44, 62, 80, 0.3);
+        }
+        
+        .btn-secondary {
+            background: var(--secondary-color);
+            border: none;
+        }
+        
+        .btn-secondary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        /* Alertas */
+        .alert {
+            border-radius: 8px;
+            padding: 1rem;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--dark-color);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 25px 0;
+            text-align: center;
+            margin-top: auto;
+            font-size: 0.9rem;
+        }
+
+        .footer-links {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 10px;
         }
 
         .footer-links a {
-            color: rgba(255, 255, 255, 0.75);
+            color: rgba(255, 255, 255, 0.6);
+            margin: 0 10px;
             text-decoration: none;
-            margin-left: 1.2rem;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
+            transition: color 0.3s;
         }
 
         .footer-links a:hover {
             color: white;
-            transform: translateY(-1px);
         }
         
-        /* ===== RESPONSIVE ===== */
-        @media (max-width: 992px) {
-            .navbar-nav .nav-link {
-                margin: 0.1rem 0;
-                padding: 0.7rem 1rem;
-            }
-            
-            .footer-content {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-            
-            .footer-links a {
-                margin: 0 0.7rem;
-            }
-            
-            .dropdown-menu {
-                border-radius: 0 0 var(--border-radius) var(--border-radius);
-                margin-top: 0;
-                box-shadow: none;
-                border: none;
-                border-top: 1px solid var(--gray-light);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .navbar-brand {
-                font-size: 1.1rem;
-            }
-            
-            .navbar-brand .logo-img {
-                height: 40px;
-            }
-            
-            .user-badge {
-                font-size: 0.8rem;
-                padding: 4px 8px;
-            }
-            
-            .navbar-text {
-                flex-direction: column;
-                gap: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                border-top: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            
-            .footer-links {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .footer-links a {
-                margin: 0;
-            }
-            
-            main {
-                padding: 1rem 0;
-            }
-            
-            .container-fluid {
-                padding-left: 10px;
-                padding-right: 10px;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .navbar-brand {
-                font-size: 1rem;
-            }
-            
-            .navbar-brand .logo-img {
-                height: 35px;
-            }
-            
-            .navbar-nav .nav-link {
-                font-size: 0.9rem;
-            }
-            
-            .dropdown-item {
-                padding: 0.5rem 1rem;
-                font-size: 0.9rem;
-            }
-            
-            footer {
-                padding: 1rem 0;
-                font-size: 0.8rem;
-            }
-        }
-        
-        /* ===== ANIMATIONS ===== */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .card, .alert {
-            animation: fadeIn 0.5s ease forwards;
+        /* Badges de usuario */
+        .user-info-badge {
+            background: rgba(255,255,255,0.15);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        /* ===== Select2 Theme Fix ===== */
+        /* Select2 Fixes */
         .select2-container--bootstrap-5 .select2-selection {
             border-radius: 0.375rem !important;
             min-height: 38px;
             padding-top: 5px;
+            border-color: #dee2e6;
         }
+        
+        {% block extra_css %}{% endblock %}
     </style>
 </head>
 <body>
-    {% load static %}
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'home' %}">
-                <img src="{% static 'flota/images/logo.png' %}" alt="Logo Transporte" class="logo-img">
-                Gestión Transporte
+                <img src="{% static 'flota/images/logo.png' %}" alt="Logo" class="logo-img">
+                <span>Gestión Transporte</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -380,154 +266,164 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     {% if user.is_authenticated %}
                         {% with user_groups=user.groups.all|join:',' %}
-                            {% if 'Administrador' in user_groups %}
+                        
+                            {% if 'Administrador' in user_groups or 'RH' in user_groups %}
                                 <li class="nav-item">
-                                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
-                                        <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+                                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                                       href="{% if 'RH' in user_groups and 'Administrador' not in user_groups %}{% url 'rh:inicio_rh' %}{% else %}{% url 'dashboard' %}{% endif %}">
+                                        <i class="fas fa-desktop"></i> Dashboard
                                     </a>
                                 </li>
                                 
                                 <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-truck me-1"></i> Gestión Flota
+                                    <a class="nav-link dropdown-toggle {% if 'rh/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-users-cog"></i> R.H.
                                     </a>
                                     <ul class="dropdown-menu">
-                                        <li><h6 class="dropdown-header">Gestión</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'unidad-list' %}"><i class="fas fa-truck"></i> Unidades</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'operador-list' %}"><i class="fas fa-user-tie"></i> Operadores</a></li>
+                                        <li><h6 class="dropdown-header">Gestión Personal</h6></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:inicio_rh' %}"><i class="fas fa-home me-2"></i>Inicio RH</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:lista_empleados' %}"><i class="fas fa-users me-2"></i>Empleados</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:empleado_create' %}"><i class="fas fa-user-plus me-2"></i>Alta Empleado</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:cumpleanos_rh' %}"><i class="fas fa-birthday-cake me-2"></i>Cumpleaños</a></li>
                                         <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Revisiones</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'asignar-revision' %}"><i class="fas fa-plus"></i> Asignar Revisiones</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'monitor-revisiones' %}"><i class="fas fa-desktop"></i> Monitor Diario</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'corregir-checklist-mal' %}">
-                                            <i class="fas fa-exclamation-triangle text-danger"></i> Corregir Items (MALO)
-                                        </a></li>
+                                        <li><h6 class="dropdown-header">Reportes</h6></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:dashboard_operadores' %}"><i class="fas fa-chart-pie me-2"></i>Operadores</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:vacantes_dashboard' %}"><i class="fas fa-user-times me-2"></i>Vacantes</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:semaforo_documentos' %}"><i class="fas fa-traffic-light me-2"></i>Vencimientos</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:reporte_documentacion_operador' %}"><i class="fas fa-file-contract me-2"></i>Docs Faltantes</a></li>
                                         <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Inspecciones</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'checklist-list' %}"><i class="fas fa-clipboard-check"></i> Checklists</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'llantas-list' %}"><i class="fas fa-dot-circle"></i> Llantas</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'rh:lista_departamentos' %}"><i class="fas fa-cogs me-2"></i>Configuración</a></li>
                                     </ul>
                                 </li>
 
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-dolly-flatbed me-1"></i> Suministros
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li><h6 class="dropdown-header">Cargas</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'cargadiesel-list' %}"><i class="fas fa-fire"></i> Cargas Diésel</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'cargaaceite-list' %}"><i class="fas fa-oil-can"></i> Cargas Aceite</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'cargaurea-list' %}"><i class="fas fa-flask"></i> Cargas Urea</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Compras y Entregas</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'comprasuministro-list' %}"><i class="fas fa-shopping-cart"></i> Compras</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'entrega-suministros-list' %}"><i class="fas fa-ticket-alt"></i> Entrega Cinchos/Tarjetas</a></li>
-                                    </ul>
+                                {% if 'Administrador' in user_groups %}
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle {% if 'gestion_flota/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-truck"></i> Flota
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Unidades</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'unidad-list' %}"><i class="fas fa-truck-moving me-2"></i>Ver Unidades</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'operador-list' %}"><i class="fas fa-id-card me-2"></i>Operadores</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">Mantenimiento</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'asignar-revision' %}"><i class="fas fa-tasks me-2"></i>Asignar Revisión</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'monitor-revisiones' %}"><i class="fas fa-desktop me-2"></i>Monitor Diario</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'checklist-list' %}"><i class="fas fa-clipboard-check me-2"></i>Checklists</a></li>
+                                        </ul>
+                                    </li>
+
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-gas-pump"></i> Suministros
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Combustible</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'cargadiesel-list' %}"><i class="fas fa-fill-drip me-2"></i>Cargas Diésel</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'cargaaceite-list' %}"><i class="fas fa-oil-can me-2"></i>Cargas Aceite</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'cargaurea-list' %}"><i class="fas fa-flask me-2"></i>Cargas Urea</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">Inventario</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'comprasuministro-list' %}"><i class="fas fa-shopping-cart me-2"></i>Compras</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'entrega-suministros-list' %}"><i class="fas fa-box-open me-2"></i>Entregas</a></li>
+                                        </ul>
+                                    </li>
+
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle {% if 'almacen/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-warehouse"></i> Almacén
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Operaciones</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'almacen:dashboard' %}"><i class="fas fa-boxes me-2"></i>Inventario General</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'almacen:entrada-crear' %}"><i class="fas fa-plus-circle me-2"></i>Registrar Entrada</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">Catálogos</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'almacen:articulo-crear' %}"><i class="fas fa-barcode me-2"></i>Crear Artículo</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'almacen:proveedor-list' %}"><i class="fas fa-people-carry me-2"></i>Proveedores</a></li>
+                                        </ul>
+                                    </li>
+
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle {% if 'mantenimiento/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-wrench"></i> Taller
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="{% url 'mantenimiento:admin_dashboard' %}"><i class="fas fa-columns me-2"></i>Panel Taller</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'mantenimiento:asignar_tarea' %}"><i class="fas fa-plus me-2"></i>Asignar Tarea</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item" href="{% url 'mantenimiento:herramienta_list' %}"><i class="fas fa-tools me-2"></i>Herramientas</a></li>
+                                        </ul>
+                                    </li>
+                                    
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{% url 'admin-panel-de-control' %}">
+                                            <i class="fas fa-cogs"></i> Panel
+                                        </a>
+                                    </li>
+                                {% endif %} 
+                                {% elif 'Encargado' in user_groups %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{% url 'encargado-pendientes-list' %}"><i class="fas fa-check-circle me-1"></i> Pendientes</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{% url 'admin-panel-de-control' %}"><i class="fas fa-chart-bar me-1"></i> Panel</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{% url 'tecnico-seleccionar-unidad' %}"><i class="fas fa-play-circle me-1"></i> Proceso Flota</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{% url 'mantenimiento:tecnico_dashboard' %}"><i class="fas fa-wrench me-1"></i> Mis Tareas</a>
                                 </li>
 
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle {% if 'almacen/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-warehouse me-1"></i> Almacén
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li><h6 class="dropdown-header">Inventario</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'almacen:dashboard' %}"><i class="fas fa-boxes"></i> Ver Inventario</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'almacen:entrada-crear' %}"><i class="fas fa-cart-plus"></i> Registrar Compra</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Catálogos</h6></li>
-                                        <li><a class="dropdown-item" href="{% url 'almacen:articulo-crear' %}"><i class="fas fa-plus"></i> Crear Artículo</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'almacen:gestion-categorias' %}"><i class="fas fa-tags"></i> Gestionar Categorías</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'almacen:proveedor-list' %}"><i class="fas fa-truck-loading"></i> Gestionar Proveedores</a></li>
-                                    </ul>
-                                </li>
-                                <li class="nav-item dropdown">
-                                    <a class="nav-link dropdown-toggle {% if 'mantenimiento/admin' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-wrench me-1"></i> Mantenimiento
-                                    </a>
-                                    <ul class="dropdown-menu">
-                                        <li><a class="dropdown-item" href="{% url 'mantenimiento:admin_dashboard' %}"><i class="fas fa-tasks"></i> Panel de Tareas</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'mantenimiento:asignar_tarea' %}"><i class="fas fa-plus-circle"></i> Asignar Tarea</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><a class="dropdown-item" href="{% url 'mantenimiento:herramienta_list' %}"><i class="fas fa-toolbox"></i> Catálogo Herramientas</a></li>
-                                        <li><a class="dropdown-item" href="{% url 'mantenimiento:correctivo_list' %}"><i class="fas fa-book"></i> Catálogo Correctivo</a></li>
-                                    </ul>
-                                </li>
-                                
-                                <li class="nav-item">
-                                    <a class="nav-link {% if 'panel-de-control' in request.path %}active{% endif %}" href="{% url 'admin-panel-de-control' %}">
-                                        <i class="fas fa-clipboard-list me-1"></i> Panel de Control
-                                    </a>
-                                </li>
-
-                            {% elif 'Encargado' in user_groups %}
-                                <li class="nav-item">
-                                    <a class="nav-link {% if 'encargado-pendientes-list' in request.path %}active{% endif %}" href="{% url 'encargado-pendientes-list' %}">
-                                        <i class="fas fa-hourglass-half me-1"></i> Finalizar Procesos
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link {% if 'panel-de-control' in request.path %}active{% endif %}" href="{% url 'admin-panel-de-control' %}">
-                                        <i class="fas fa-clipboard-list me-1"></i> Panel de Control
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link {% if 'tecnico-seleccionar-unidad' in request.path %}active{% endif %}" href="{% url 'tecnico-seleccionar-unidad' %}">
-                                        <i class="fas fa-plus-circle me-1"></i> Iniciar Proceso Flota
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link {% if 'mantenimiento/tecnico' in request.path %}active{% endif %}" href="{% url 'mantenimiento:tecnico_dashboard' %}">
-                                        <i class="fas fa-wrench me-1"></i> Mis Tareas (Mto.)
-                                    </a>
-                                </li>
-                                
                             {% elif 'Tecnico' in user_groups %}
                                 <li class="nav-item">
-                                    <a class="nav-link {% if 'tecnico' in request.path and 'mantenimiento' not in request.path %}active{% endif %}" href="{% url 'tecnico-seleccionar-unidad' %}">
-                                        <i class="fas fa-tools me-1"></i> Iniciar Proceso Flota
-                                    </a>
+                                    <a class="nav-link" href="{% url 'tecnico-seleccionar-unidad' %}"><i class="fas fa-tools me-1"></i> Revisión Flota</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link {% if 'mantenimiento/tecnico' in request.path %}active{% endif %}" href="{% url 'mantenimiento:tecnico_dashboard' %}">
-                                        <i class="fas fa-wrench me-1"></i> Mis Tareas (Mto.)
-                                    </a>
+                                    <a class="nav-link" href="{% url 'mantenimiento:tecnico_dashboard' %}"><i class="fas fa-wrench me-1"></i> Tareas Asignadas</a>
                                 </li>
                             {% endif %}
+                            
                         {% endwith %}
                     {% endif %}
                 </ul>
-                <span class="navbar-text">
+
+                <div class="d-flex align-items-center">
                     {% if user.is_authenticated %}
-                        <span class="user-badge">
-                            <i class="fas fa-user-circle"></i>
-                            {{ user.username }}
-                            {% if user.groups.all %}
-                                <span class="badge bg-secondary ms-1">{{ user.groups.all.0.name }}</span>
-                            {% endif %}
-                        </span>
-                        |
+                        <div class="user-info-badge me-3 text-white">
+                            <i class="fas fa-user-circle fa-lg"></i>
+                            <div class="d-flex flex-column ms-2" style="line-height: 1.1;">
+                                <span style="font-weight: 600;">{{ user.username }}</span>
+                                <span style="font-size: 0.75rem; opacity: 0.8;">
+                                    {% if user.groups.all %}{{ user.groups.all.0.name }}{% else %}Usuario{% endif %}
+                                </span>
+                            </div>
+                        </div>
                         <form action="{% url 'logout' %}" method="post" class="d-inline">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-link p-0" style="text-decoration: none; vertical-align: baseline;">
-                                <i class="fas fa-sign-out-alt me-1"></i>Cerrar Sesión
+                            <button type="submit" class="btn btn-outline-light btn-sm" title="Cerrar Sesión">
+                                <i class="fas fa-sign-out-alt"></i>
                             </button>
                         </form>
                     {% else %}
-                        <a href="{% url 'login' %}"><i class="fas fa-sign-in-alt me-1"></i>Iniciar Sesión</a>
+                        <a href="{% url 'login' %}" class="btn btn-light btn-sm fw-bold">
+                            <i class="fas fa-sign-in-alt me-1"></i> Iniciar Sesión
+                        </a>
                     {% endif %}
-                </span>
+                </div>
             </div>
         </div>
     </nav>
 
-    <main class="container-fluid mt-4">
+    <div class="container-fluid main-container">
         {% if messages %}
             <div class="row justify-content-center">
                 <div class="col-md-10 col-lg-8">
                     {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show bg-white" role="alert">
                             {{ message }}
-                            <button typebutton" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     {% endfor %}
                 </div>
@@ -535,27 +431,33 @@
         {% endif %}
         
         {% block content %}{% endblock %}
-    </main>
+    </div>
 
-    <footer class="footer mt-auto">
+    <footer class="footer">
         <div class="container-fluid">
-            <div class="footer-content">
-                <div class="copyright">
-                    &copy; {% now "Y" %} Sistema de Gestión de Transporte. Todos los derechos reservados.
-                </div>
-                <div class="footer-links">
-                    <a href="#"><i class="fas fa-question-circle me-1"></i> Ayuda</a>
-                    <a href="#"><i class="fas fa-shield-alt me-1"></i> Privacidad</a>
-                    <a href="#"><i class="fas fa-file-contract me-1"></i> Términos</a>
-                </div>
+            <p class="mb-2">&copy; {% now "Y" %} <strong>MIGMAR</strong> - Sistema Integral de Gestión. Todos los derechos reservados.</p>
+            <div class="footer-links">
+                <a href="#"><i class="fas fa-question-circle me-1"></i>Soporte</a>
+                <a href="#"><i class="fas fa-shield-alt me-1"></i>Privacidad</a>
+                <a href="#"><i class="fas fa-book me-1"></i>Manual</a>
             </div>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Inicializar Select2 en todos los select con clase 'select2'
+            $('.select2').select2({
+                theme: 'bootstrap-5',
+                width: '100%'
+            });
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

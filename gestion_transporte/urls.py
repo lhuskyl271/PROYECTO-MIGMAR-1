@@ -8,6 +8,7 @@ urlpatterns = [
     path('', include('flota.urls')), # Incluir las URLs de nuestra app
     path('mantenimiento/', include('mantenimiento.urls', namespace='mantenimiento')),
     path('almacen/', include('almacen.urls', namespace='almacen')),
+    path('rh/', include('RH.urls')),
     # -------------------------
 ]
 
