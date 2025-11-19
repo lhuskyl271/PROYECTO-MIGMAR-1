@@ -1,6 +1,7 @@
 # RH/forms.py
 from django import forms
 from django.db.models import Q
+from django.forms import ModelForm
 from .models import (
     Empleado, Departamento, Puesto, MotivoInactivacion,
     TipoDocumentoOperador, DocumentoOperador, HistorialLaboral,
@@ -8,7 +9,7 @@ from .models import (
     Hijo
 )
 
-class EmpleadoForm(forms.ModelForm):
+class EmpleadoForm(ModelForm):
     # Hacer los campos no requeridos por defecto.
     tipo_carga = forms.ModelMultipleChoiceField(
         queryset=TipoCarga.objects.all(),
@@ -33,10 +34,10 @@ class EmpleadoForm(forms.ModelForm):
         model = Empleado
         fields = '__all__'
         widgets = {
-            # ... (los otros widgets permanecen sin cambios) ...
             'numero_empleado': forms.TextInput(attrs={'class': 'form-control'}),
             'nombre': forms.TextInput(attrs={'class': 'form-control'}),
             'apellido': forms.TextInput(attrs={'class': 'form-control'}),
+            # Puesto y Depto se configuran como Select en el __init__
             'puesto': forms.Select(attrs={'class': 'form-select'}),
             'departamento': forms.Select(attrs={'class': 'form-select'}),
             'fecha_contratacion': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -92,61 +93,51 @@ class EmpleadoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        supervisor_query = Q(puesto__nombre__icontains='Supervisor') | Q(puesto__nombre__icontains='Gerente')
+        # 1. ARREGLO DE DROPDOWNS (Puesto y Departamento)
+        # Como ahora son texto en la BD, cargamos las opciones manualmente para que el usuario vea una lista
+        puestos_disponibles = Puesto.objects.all().order_by('nombre')
+        choices_puestos = [(p.nombre, p.nombre) for p in puestos_disponibles]
+        choices_puestos.insert(0, ('', '---------'))
+        self.fields['puesto'].widget = forms.Select(attrs={'class': 'form-select'}, choices=choices_puestos)
+
+        deptos_disponibles = Departamento.objects.all().order_by('nombre')
+        choices_deptos = [(d.nombre, d.nombre) for d in deptos_disponibles]
+        choices_deptos.insert(0, ('', '---------'))
+        self.fields['departamento'].widget = forms.Select(attrs={'class': 'form-select'}, choices=choices_deptos)
+
+        # 2. ARREGLO DEL ERROR DE FILTRO (Supervisor)
+        # Cambiamos 'puesto__nombre__icontains' -> 'puesto__icontains' (búsqueda directa en texto)
+        supervisor_query = Q(puesto__icontains='Supervisor') | Q(puesto__icontains='Gerente')
+        
         potential_supervisors = Empleado.objects.filter(supervisor_query).order_by('apellido', 'nombre')
 
         if self.instance and self.instance.pk:
             self.fields['supervisor'].queryset = potential_supervisors.exclude(pk=self.instance.pk)
         else:
             self.fields['supervisor'].queryset = potential_supervisors
+        
+        # Etiqueta personalizada para el supervisor
+        self.fields['supervisor'].label_from_instance = lambda obj: f"{obj.nombre} {obj.apellido}"
 
-        # --- MODIFICACIÓN ---
-        # Iterar sobre todos los campos y establecerlos como no obligatorios
+        # 3. CAMPOS NO REQUERIDOS
         for field_name, field in self.fields.items():
             field.required = False
-            
-            # Opcional: También puedes quitar la clase 'is-required' si la estabas usando
             widget_attrs = field.widget.attrs
             if 'class' in widget_attrs:
                 widget_attrs['class'] = widget_attrs['class'].replace('is-required', '')
         
     def clean_email(self):
         email = self.cleaned_data.get('email')
-        
-        # Si el usuario ingresó un correo (no está vacío)
         if email:
-            # 1. Verificar si ya existe ese correo en otro empleado
-            # Excluimos al empleado actual (self.instance) para permitir guardar 
-            # el mismo correo si no se ha modificado.
             qs = Empleado.objects.filter(email=email)
-            
             if self.instance and self.instance.pk:
                 qs = qs.exclude(pk=self.instance.pk)
-            
             if qs.exists():
-                raise forms.ValidationError("Este correo electrónico ya está asignado a otro empleado. Por favor utiliza uno diferente.")
-        
+                raise forms.ValidationError("Este correo electrónico ya está asignado a otro empleado.")
         return email
-
 
     def clean(self):
         cleaned_data = super().clean()
-        
-        # --- MODIFICACIÓN ---
-        # Se elimina (o comenta) la lógica de validación condicional para
-        # que ningún campo sea obligatorio, ni siquiera para Operadores.
-        
-        # puesto = cleaned_data.get('puesto')
-        # if puesto and 'operador' in puesto.nombre.lower():
-        #     if not cleaned_data.get('tipo_viaje'):
-        #         self.add_error('tipo_viaje', 'Este campo es obligatorio para el puesto de Operador.')
-        #     
-        #     if not cleaned_data.get('tipo_carga'):
-        #         self.add_error('tipo_carga', 'Este campo es obligatorio para el puesto de Operador.')
-        #
-        #     if not cleaned_data.get('division_operativa'):
-        #         self.add_error('division_operativa', 'Este campo es obligatorio para el puesto de Operador.')
-        
         return cleaned_data
 
 
