@@ -119,6 +119,7 @@ class MotivoInactivacion(models.Model):
         return self.motivo
 
 class Empleado(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     numero_empleado = models.CharField(max_length=20, unique=True, null=True, blank=True, help_text="Número de empleado interno único")
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
