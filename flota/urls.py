@@ -132,4 +132,5 @@ urlpatterns = [
     path('revisiones/correctivo/update/<int:pk>/', update_asignacion_correctivo, name='update-correctivo-details'),
     path('tareas/<int:tarea_pk>/add-pieza/', add_pieza_a_tarea, name='add-pieza-a-tarea'),
     path('tareas/pieza/<int:pieza_pk>/eliminar/', delete_pieza_de_tarea, name='delete-pieza-de-tarea'),
-    path('revisiones/<int:pk>/reporte-pdf/', download_single_revision_pdf, name='single-revision-reporte-pdf'),]
+    path('revisiones/<int:pk>/reporte-pdf/', download_single_revision_pdf, name='single-revision-reporte-pdf'),
+    path('pruebas/laboratorio-ocr/', laboratorio_ocr_view, name='laboratorio-ocr'),]

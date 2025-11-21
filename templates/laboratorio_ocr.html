@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-info text-white">
+            <h3><i class="fas fa-robot"></i> Laboratorio de Pruebas OCR</h3>
+        </div>
+        <div class="card-body">
+            <p class="lead">Sube una foto de un odómetro o de un horómetro para probar si el sistema detecta el número correctamente.</p>
+            
+            <form method="post" enctype="multipart/form-data" class="mb-4 text-center">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="imagen_prueba" class="form-label fw-bold">Seleccionar Foto</label>
+                    <input type="file" name="imagen_prueba" id="imagen_prueba" class="form-control form-control-lg" accept="image/*" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-search"></i> Analizar Imagen
+                </button>
+            </form>
+
+            <hr>
+
+            {% if resultado %}
+                <div class="alert alert-success text-center">
+                    <h4>Número Detectado:</h4>
+                    <h1 class="display-3 fw-bold">{{ resultado }}</h1>
+                </div>
+            {% elif error %}
+                <div class="alert alert-warning text-center">
+                    <h4>Resultado:</h4>
+                    <p class="lead">{{ error }}</p>
+                </div>
+            {% else %}
+                <div class="alert alert-secondary text-center">
+                    <small>Esperando imagen...</small>
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer text-muted">
+            Nota: Esta prueba no guarda registros en la base de datos. No consume folios ni afecta inventarios.
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -288,3 +288,16 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+RENDER_SECRET_PATH = '/etc/secrets/google_credentials.json'
+
+if os.path.exists(RENDER_SECRET_PATH):
+    # Estamos en Render
+    GOOGLE_APPLICATION_CREDENTIALS_PATH = RENDER_SECRET_PATH
+else:
+    # Estamos en local (tu PC)
+    # Asegúrate de que 'tu_archivo_credenciales.json' coincida con el nombre real de tu archivo en la carpeta del proyecto
+    GOOGLE_APPLICATION_CREDENTIALS_PATH = os.path.join(BASE_DIR, 'groovy-ace-478920-s5-99b19b621772.json')
+
+# Imprimir para depurar (opcional, verás esto en los logs de Render si algo falla)
+print(f"Usando credenciales de Google en: {GOOGLE_APPLICATION_CREDENTIALS_PATH}")

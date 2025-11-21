@@ -3690,3 +3690,65 @@ def download_single_revision_pdf(request, pk):
 # === FIN DE LA VISTA PDF ===
 # ==========================================================
 
+
+from .utils_vision import detectar_texto_en_imagen # Asegúrate de importar la función que creamos antes
+
+@login_required
+def laboratorio_ocr_view(request):
+    """
+    Vista de prueba para subir una imagen y ver qué detecta Google Vision
+    sin guardar nada en la base de datos.
+    """
+    # Seguridad: Solo admins o encargados pueden entrar aquí
+    if not (es_admin(request.user) or es_encargado(request.user)):
+        raise PermissionDenied("Solo personal autorizado puede acceder al laboratorio.")
+
+    resultado = None
+    error = None
+    imagen_url = None
+
+    if request.method == 'POST' and request.FILES.get('imagen_prueba'):
+        imagen = request.FILES['imagen_prueba']
+        
+        try:
+            # Llamamos a la función de OCR directamente
+            resultado = detectar_texto_en_imagen(imagen)
+            
+            if resultado is None:
+                error = "Google Vision no encontró ningún número confiable en la imagen."
+            
+            # Truco para mostrar la imagen subida temporalmente en el template (opcional)
+            # Solo convertimos a base64 para previsualizarla si quisieras, 
+            # pero por simplicidad, confiaremos en el resultado numérico.
+            
+        except Exception as e:
+            error = f"Ocurrió un error técnico: {e}"
+
+    return render(request, 'flota/laboratorio_ocr.html', {
+        'resultado': resultado,
+        'error': error,
+        'titulo': 'Laboratorio de Pruebas OCR (Google Vision)'
+    })
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .utils_vision import detectar_texto_en_imagen
+
+@login_required
+@require_POST
+def api_ocr_lectura(request):
+    """
+    Recibe una imagen vía POST y devuelve el número detectado.
+    """
+    if 'imagen' not in request.FILES:
+        return JsonResponse({'status': 'error', 'message': 'No se envió imagen'}, status=400)
+    
+    imagen = request.FILES['imagen']
+    
+    # Llamamos a nuestra función de utilidad
+    numero_detectado = detectar_texto_en_imagen(imagen)
+    
+    if numero_detectado is not None:
+        return JsonResponse({'status': 'ok', 'numero': numero_detectado})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'No se detectaron números claros'}, status=200)
