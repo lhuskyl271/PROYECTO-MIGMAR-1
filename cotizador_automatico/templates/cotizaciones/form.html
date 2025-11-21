@@ -1,31 +1,38 @@
 {% extends 'base.html' %}
 
-{% block title %}Nueva Cotización{% endblock %}
-
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <form method="post" class="needs-validation">
-                {% csrf_token %}
-                
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2><i class="fas fa-calculator me-2"></i>Nueva Cotización Inteligente</h2>
-                    <a href="{% url 'cotizaciones_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
-                </div>
+<div class="container mt-4 mb-5">
+    <form method="post" novalidate>
+        {% csrf_token %}
 
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>1. Ruta y Cliente</h5>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold text-dark mb-0">Cotizador de Fletes</h2>
+                <p class="text-muted small">Sistema de Cálculo de Alta Precisión</p>
+            </div>
+            <div class="text-end">
+                <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+                    <i class="fas fa-chart-line me-2"></i> Calcular Rentabilidad
+                </button>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            
+            <div class="col-lg-8">
+                
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-map-marked-alt me-2"></i>1. Definición de Ruta</h5>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">Cliente</label>
+                                <label class="form-label fw-bold">Cliente</label>
                                 {{ form.cliente }}
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Unidad Asignada</label>
+                                <label class="form-label fw-bold">Unidad Asignada</label>
                                 {{ form.unidad }}
                             </div>
                             <div class="col-md-6">
@@ -36,109 +43,126 @@
                                 <label class="form-label">Destino</label>
                                 {{ form.destino }}
                             </div>
+                            
+                            <hr class="my-3">
+                            
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">Distancia Ida (KM)</label>
                                 {{ form.distancia_km_ida }}
+                                {{ form.distancia_km_ida.help_text }}
                             </div>
-                            <div class="col-md-4 pt-4">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Tiempo Total (Días)</label>
+                                {{ form.dias_viaje }}
+                                {{ form.dias_viaje.help_text }}
+                            </div>
+                            <div class="col-md-4 d-flex align-items-center pt-4">
                                 <div class="form-check form-switch">
                                     {{ form.es_viaje_redondo }}
-                                    <label class="form-check-label">¿Es Viaje Redondo?</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4 pt-4">
-                                <div class="form-check form-switch">
-                                    {{ form.regreso_cargado }}
-                                    <label class="form-check-label">¿Regresa Cargado?</label>
+                                    <label class="form-check-label fw-bold" for="{{ form.es_viaje_redondo.id_for_label }}">¿Cobrar Redondo?</label>
+                                    {{ form.es_viaje_redondo.help_text }}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card shadow mb-4 border-info">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><i class="fas fa-balance-scale me-2"></i>2. Logística de Precisión</h5>
-                    </div>
-                    <div class="card-body bg-light">
-                        <div class="alert alert-info py-2 small">
-                            <i class="fas fa-info-circle"></i> Estos datos ajustan el rendimiento de combustible y desgaste.
-                        </div>
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Peso Carga (Tons)</label>
-                                {{ form.peso_carga_toneladas }}
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Capacidad Unidad</label>
-                                {{ form.capacidad_maxima_unidad }}
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Factor Terreno</label>
-                                {{ form.factor_terreno }}
-                                <div class="form-text small">1.0=Plano, 1.3=Sierra</div>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Días de Viaje</label>
-                                {{ form.dias_viaje }}
+                <div class="card shadow-sm border-0 bg-light">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="form-check form-switch me-3">
+                                {{ form.es_refrigerado }}
+                                <label class="form-check-label fw-bold" for="toggleThermo">¿Requiere Refrigeración (Thermo)?</label>
                             </div>
                         </div>
                         
-                        <h6 class="mt-4 text-muted border-bottom pb-2">Tiempos Muertos (Estadías)</h6>
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label">Hrs Espera Carga</label>
-                                {{ form.horas_espera_carga }}
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Hrs Espera Descarga</label>
-                                {{ form.horas_espera_descarga }}
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Costo x Hora ($)</label>
-                                {{ form.costo_hora_demora }}
+                        <div id="thermoFields" class="ps-4 border-start border-3 border-info" style="display:none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Horas estimadas de motor encendido</label>
+                                    {{ form.horas_thermo_motor }}
+                                    {{ form.horas_thermo_motor.help_text }}
+                                </div>
+                                <div class="col-md-6 d-flex align-items-center">
+                                    <span class="text-muted small">
+                                        <i class="fas fa-info-circle"></i> Esto agrega el costo de diésel adicional independiente del tractor.
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><i class="fas fa-wallet me-2"></i>3. Gastos Directos</h5>
+            </div>
+
+            <div class="col-lg-4">
+                
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold text-secondary"><i class="fas fa-wallet me-2"></i>Gastos Directos</h5>
                     </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Sueldo Operador</label>
+                    <div class="card-body bg-light">
+                        <div class="mb-3">
+                            <label class="form-label">Sueldo Operador</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
                                 {{ form.sueldo_operador }}
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Viáticos</label>
-                                {{ form.viaticos }}
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Casetas (Total)</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Casetas</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
                                 {{ form.costo_casetas }}
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label">Maniobras</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Maniobras</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
                                 {{ form.costo_maniobras }}
                             </div>
-                            <div class="col-md-12">
-                                <label class="form-label fw-bold text-success">Margen de Utilidad Deseado (%)</label>
-                                {{ form.margen_utilidad_deseado }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Viáticos</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                {{ form.viaticos }}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="d-grid gap-2 mb-5">
-                    <button type="submit" class="btn btn-success btn-lg fw-bold">
-                        <i class="fas fa-rocket me-2"></i>CALCULAR COTIZACIÓN PROFESIONAL
-                    </button>
+                <div class="card shadow border-success">
+                    <div class="card-body">
+                        <label class="form-label fw-bold text-success">MARGEN DE UTILIDAD (%)</label>
+                        {{ form.margen_utilidad_deseado }}
+                        {{ form.margen_utilidad_deseado.help_text }}
+                    </div>
                 </div>
-            </form>
+
+            </div>
         </div>
-    </div>
+    </form>
 </div>
+
+<script>
+    // Script simple para mostrar/ocultar campos de Thermo
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('toggleThermo');
+        const fields = document.getElementById('thermoFields');
+        
+        function updateVisibility() {
+            if (toggle.checked) {
+                fields.style.display = 'block';
+            } else {
+                fields.style.display = 'none';
+                document.querySelector('[name="horas_thermo_motor"]').value = 0;
+            }
+        }
+        
+        toggle.addEventListener('change', updateVisibility);
+        updateVisibility(); // Ejecutar al inicio
+    });
+</script>
 {% endblock %}

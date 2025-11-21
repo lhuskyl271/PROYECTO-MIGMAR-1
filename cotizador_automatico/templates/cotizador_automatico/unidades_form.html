@@ -1,63 +1,163 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
-{% block title %}Gestión de Unidad{% endblock %}
+{% block title %}Configuración de Unidad{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Datos de la Unidad</h5>
+    <form method="post" id="unidadForm">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="fw-bold text-dark"><i class="fas fa-truck-moving me-2"></i>Datos de la Unidad</h2>
+                    <a href="{% url 'unidades_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
                 </div>
-                <div class="card-body">
-                    <form method="post">
-                        {% csrf_token %}
-                        
+
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold text-primary">1. Identificación y Eficiencia</h5>
+                    </div>
+                    <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Nombre / Económico</label>
+                            <label class="form-label fw-bold">Nombre / Número Económico</label>
                             {{ form.nombre }}
                         </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">Rendimiento Cargado (km/l)</label>
-                                {{ form.rendimiento_cargado }}
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">Rendimiento Vacío (km/l)</label>
-                                {{ form.rendimiento_vacio }}
-                            </div>
-                        </div>
-
-                        <h6 class="border-bottom pb-2 mt-4 mb-3 text-primary">Costos Fijos Mensuales</h6>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">Seguro Mensual ($)</label>
-                                {{ form.costo_seguro_mensual }}
+                                <label class="form-label fw-bold text-dark">Rendimiento Cargado</label>
+                                <div class="input-group">
+                                    {{ form.rendimiento_cargado }}
+                                    <span class="input-group-text">Km/L</span>
+                                </div>
+                                <div class="form-text">{{ form.rendimiento_cargado.help_text }}</div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">GPS / Rastreo ($)</label>
-                                {{ form.costo_gps_mensual }}
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Depreciación ($)</label>
-                                {{ form.depreciacion_mensual }}
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Otros Admin ($)</label>
-                                {{ form.otros_fijos_mensual }}
+                                <label class="form-label text-muted">Rendimiento Vacío</label>
+                                <div class="input-group">
+                                    {{ form.rendimiento_vacio }}
+                                    <span class="input-group-text">Km/L</span>
+                                </div>
                             </div>
                         </div>
+                    </div>
+                </div>
 
-                        <div class="d-flex justify-content-end mt-4 gap-2">
-                            <a href="{% url 'unidades_lista' %}" class="btn btn-secondary">Cancelar</a>
-                            <button type="submit" class="btn btn-success"><i class="fas fa-save me-2"></i>Guardar Unidad</button>
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold text-danger"><i class="fas fa-coins me-2"></i>2. Costos Fijos Mensuales</h5>
+                        <span class="badge bg-light text-dark border">Base 30 días</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info small p-2">
+                            <i class="fas fa-info-circle me-2"></i> Ingrese los gastos fijos para calcular el "Costo Día" automáticamente.
                         </div>
-                    </form>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Seguro de la Unidad</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.costo_seguro_mensual }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rastreo Satelital (GPS)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.costo_gps_mensual }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Depreciación Financiera</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.depreciacion_mensual }}
+                                </div>
+                                <div class="form-text small">{{ form.depreciacion_mensual.help_text }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Otros (Placas/Admin)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.otros_fijos_mensual }}
+                                </div>
+                                <div class="form-text small">{{ form.otros_fijos_mensual.help_text }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid mb-5">
+                    <button type="submit" class="btn btn-primary btn-lg shadow">
+                        <i class="fas fa-save me-2"></i>Guardar Unidad
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow border-success sticky-top" style="top: 20px; z-index: 100;">
+                    <div class="card-header bg-success text-white text-center py-3">
+                        <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>Análisis de Costo</h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <h6 class="text-muted text-uppercase small">Costo Fijo Mensual Total</h6>
+                        <h3 class="fw-bold text-dark" id="displayTotalMensual">$0.00</h3>
+                        
+                        <hr>
+                        
+                        <h6 class="text-success fw-bold text-uppercase small">Costo Diario Operativo</h6>
+                        <h1 class="display-5 fw-bold text-success" id="displayCostoDiario">$0.00</h1>
+                        <p class="small text-muted mt-2">
+                            Este es el costo mínimo que debe cubrir la unidad cada día antes de generar utilidad.
+                        </p>
+
+                        <div class="alert alert-light border mt-3 text-start small">
+                            <strong>Fórmula Aplicada:</strong><br>
+                            <code>(Seguro + GPS + Deprec + Otros) / 30 días</code>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </form>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Seleccionar todos los inputs que afectan el costo
+        const inputs = document.querySelectorAll('.costo-input');
+        const displayTotal = document.getElementById('displayTotalMensual');
+        const displayDiario = document.getElementById('displayCostoDiario');
+
+        function calcularTotales() {
+            let totalMensual = 0;
+            
+            inputs.forEach(input => {
+                const val = parseFloat(input.value) || 0;
+                totalMensual += val;
+            });
+
+            const costoDiario = totalMensual / 30;
+
+            // Formatear a moneda
+            const formatter = new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN'
+            });
+
+            displayTotal.textContent = formatter.format(totalMensual);
+            displayDiario.textContent = formatter.format(costoDiario);
+        }
+
+        // Escuchar cambios en tiempo real
+        inputs.forEach(input => {
+            input.addEventListener('input', calcularTotales);
+        });
+
+        // Calcular al inicio (por si es edición)
+        calcularTotales();
+    });
+</script>
 {% endblock %}
