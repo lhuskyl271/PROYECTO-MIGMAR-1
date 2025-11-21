@@ -106,6 +106,11 @@ class OperadorForm(forms.ModelForm):
 
 class CargaDieselForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        # --- CORRECCIÓN: Extraer argumentos personalizados ANTES de super().__init__ ---
+        self.unidad_instance = kwargs.pop('unidad', None)
+        self.user = kwargs.pop('user', None)
+        # -----------------------------------------------------------------------------
+
         super().__init__(*args, **kwargs)
         
         # Configuración para la FOTO DEL ODÓMETRO (Trigger del OCR)
@@ -135,22 +140,10 @@ class CargaDieselForm(forms.ModelForm):
                     'capture': 'environment'
                 })
 
-    class Meta:
-        model = CargaDiesel
-        fields = '__all__'
-        exclude = ['fecha', 'rendimiento', 'costo']
-        widgets = {
-            'unidad': forms.Select(attrs={'class': 'form-control'}),
-            'operador': forms.Select(attrs={'class': 'form-control'}),
-        }
-
     def clean(self):
         cleaned_data = super().clean()
 
-        # # --- INICIO: VALIDACIÓN DE INVENTARIO DESACTIVADA ---
-        # ... (código de inventario) ...
-        # # --- FIN: VALIDACIÓN DE INVENTARIO DESACTIVADA ---
-
+        # La unidad puede venir de la instancia (edición) o del argumento (creación)
         unidad = self.unidad_instance or cleaned_data.get('unidad')
         if not unidad: return cleaned_data
         
@@ -158,14 +151,13 @@ class CargaDieselForm(forms.ModelForm):
         if ultima_carga:
             km_actual_form = cleaned_data.get('km_actual')
             
-            # ================= INICIO DEL BLOQUE A CONSERVAR =================
-            # Esta validación se aplica a todos, excepto a los admins.
+            # Validar solo si NO es administrador
+            # Si self.user es None (caso Encargado que no pasa user), is_admin será False, lo cual es correcto.
             is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
 
             if not is_admin:
                 if km_actual_form is not None and km_actual_form <= ultima_carga.km_actual:
                     self.add_error('km_actual', f"El kilometraje debe ser mayor al último registrado ({ultima_carga.km_actual} km).")
-            # ================= FIN DEL BLOQUE A CONSERVAR ===================
             
             hrs_thermo_form = cleaned_data.get('hrs_thermo')
             if hrs_thermo_form is not None and hrs_thermo_form <= (ultima_carga.hrs_thermo or 0):
@@ -175,14 +167,19 @@ class CargaDieselForm(forms.ModelForm):
     def clean_cinchos_actuales(self):
         cinchos_actuales = self.cleaned_data.get('cinchos_actuales')
         if cinchos_actuales:
-            if CargaDiesel.objects.filter(cinchos_actuales=cinchos_actuales).exists():
+            # Excluir la propia instancia si estamos editando
+            qs = CargaDiesel.objects.filter(cinchos_actuales=cinchos_actuales)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            
+            if qs.exists():
                 raise ValidationError("Este número de cincho ya ha sido registrado. No se puede repetir.")
         return cinchos_actuales
 
     class Meta:
         model = CargaDiesel
         fields = '__all__'
-        exclude = ['fecha', 'rendimiento', 'costo'] 
+        exclude = ['fecha', 'rendimiento', 'costo']
         widgets = {
             'unidad': forms.Select(attrs={'class': 'form-control'}),
             'operador': forms.Select(attrs={'class': 'form-control'}),
