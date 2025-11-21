@@ -122,7 +122,14 @@ class CargaDiesel(models.Model):
     rendimiento = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, verbose_name="Rendimiento (Km/L)")
     foto_motor = models.ImageField(upload_to='cargas_diesel/motor/', blank=True, null=True, verbose_name="Foto Motor")
     foto_thermo = models.ImageField(upload_to='cargas_diesel/thermo/', blank=True, null=True, verbose_name="Foto Thermo")
-   
+    foto_odometro = models.ImageField(upload_to='cargas_diesel/odometro/', blank=True, null=True, verbose_name="Foto Odómetro (OCR)")
+    foto_sticker = models.ImageField(upload_to='cargas_diesel/sticker/', blank=True, null=True, verbose_name="Foto Sticker")
+    foto_thermo_hrs = models.ImageField(
+        upload_to='checklist_thermo_hrs/', 
+        blank=True, null=True, 
+        verbose_name="Foto Horas Thermo"
+    )
+    
     def save(self, *args, **kwargs):
         """
         Versión simplificada. Ya no calcula el costo aquí.
@@ -242,24 +249,6 @@ class ChecklistInspeccion(models.Model):
     tecnico = models.ForeignKey(User, on_delete=models.CASCADE)
     es_dummy = models.BooleanField(default=False, verbose_name="Es un registro 'Solo Carga'")
     
-    # --- INICIO DE LA CORRECCIÓN ---
-    # Estos son los campos correctos para el Checklist
-    foto_odometro = models.ImageField(
-        upload_to='checklist_odometros/', 
-        blank=True, null=True, 
-        verbose_name="Foto Odómetro (KM)"
-    )
-    foto_thermo_hrs = models.ImageField(
-        upload_to='checklist_thermo_hrs/', 
-        blank=True, null=True, 
-        verbose_name="Foto Horas Thermo"
-    )
-    
-    foto_sticker = models.ImageField(
-        upload_to='checklist_stickers/', 
-        blank=True, null=True, 
-        verbose_name="Foto Sticker"
-    )
     # --- FIN DE LA CORRECCIÓN ---
 
     # Estructura Exterior
@@ -331,14 +320,7 @@ class LlantasInspeccion(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, related_name='inspecciones_llantas')
     tecnico = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    
-    # --- INICIO DE LA MODIFICACIÓN ---
-    km = models.PositiveIntegerField(
-        verbose_name="Kilometraje en Inspección",
-        null=True,  # <-- AÑADIR ESTA LÍNEA
-        blank=True  # <-- AÑADIR ESTA LÍNEA
-    )
-    # --- FIN DE LA MODIFICACIÓN ---
+
     
     es_dummy = models.BooleanField(default=False, verbose_name="Es un registro 'Solo Carga'")
 

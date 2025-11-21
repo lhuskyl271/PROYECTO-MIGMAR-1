@@ -1254,36 +1254,28 @@ class SeleccionarUnidadView(IniciaProcesoRequiredMixin, ListView):
         return context
 
 class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
-    """Paso 2 (Común): Llenar el Checklist."""
+    """Paso 2 (Común): Llenar el Checklist. Ahora SIN fotos de odómetro/sticker."""
     form_class = ChecklistInspeccionForm
     template_name = 'checklist_form.html'
 
     def get_initial(self):
-        """
-        --- MÉTODO CORREGIDO ---
-        Establece valores iniciales. Obtiene el operador de la sesión
-        (si el Encargado lo eligió) y pre-llena 'BIEN' si el usuario es Encargado.
-        """
-        # Limpiamos IDs de procesos anteriores por si acaso
+        # Limpiamos IDs de procesos anteriores
         self.request.session.pop('proceso_checklist_id', None)
         
         unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
         initial = {'unidad': unidad}
 
-        # --- LÓGICA AÑADIDA: LEER OPERADOR DE LA SESIÓN ---
-        # Obtener el operador que el Encargado seleccionó en el paso anterior
+        # Obtener el operador de la sesión (si aplica)
         operador_id = self.request.session.get('proceso_operador_id')
         if operador_id:
             try:
                 operador = Operador.objects.get(pk=operador_id)
                 initial['operador'] = operador
             except Operador.DoesNotExist:
-                # Si el operador no existe, borramos la sesión para evitar errores
                 self.request.session.pop('proceso_operador_id', None)
-                messages.warning(self.request, "El operador seleccionado ya no es válido. Por favor, selecciónelo de nuevo.")
-        # --- FIN LÓGICA AÑADIDA ---
+                messages.warning(self.request, "El operador seleccionado ya no es válido.")
 
-        # Si el usuario es Encargado, pre-llenar todo como 'BIEN'
+        # Pre-llenar 'BIEN' para Encargados
         if es_encargado(self.request.user):
             for field in ChecklistInspeccion._meta.get_fields():
                 if isinstance(field, models.CharField) and hasattr(field, 'choices') and field.choices:
@@ -1293,19 +1285,12 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # ===================== INICIO DE LA CORRECCIÓN =====================
-        #
-        # Necesitamos obtener la 'unidad' aquí y pasarla al contexto.
-        # La plantilla 'checklist_form.html' la necesita para mostrar
-        # condicionalmente el campo 'foto_thermo_hrs'.
-        #
         unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
         context['unidad'] = unidad
         context['titulo'] = f"Iniciar Checklist: {unidad.nombre}"
-        # ====================== FIN DE LA CORRECCIÓN =====================
         
         form = context['form']
+        # Estructura visual del formulario
         field_groups = {
             'Estructura Exterior': ['cristales', 'espejos', 'logos', 'num_economico', 'puertas', 'cofre', 'parrilla', 'defensas', 'faros', 'plafoneria', 'stops', 'direccionales', 'tapiceria', 'instrumentos', 'carroceria', 'piso', 'costados', 'escape', 'pintura', 'franjas', 'loderas', 'extintor', 'senalamientos', 'estado_general'],
             'Mecánica y Motor': ['motor', 'caja', 'diferenciales', 'suspension_delantera', 'suspension_trasera', 'fugas_combustible', 'fugas_aceite', 'estado_llantas', 'presion_llantas', 'purga_tanques', 'estado_balatas', 'amortiguadores_delanteros', 'amortiguadores_traseros', 'rines_aluminio', 'mangueras_servicio', 'tarjeta_llave', 'revision_fusibles', 'revision_luces','revision_fuga_aire']
@@ -1326,42 +1311,37 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        """
-        --- MÉTODO CORREGIDO ---
-        Añade lógica para limpiar el ID del operador de la sesión después de guardar.
-        """
-        # --- LÓGICA AÑADIDA: LIMPIAR SESIÓN ---
-        # Limpiar la sesión del operador, ya no se necesita para los siguientes pasos
+        # Limpiar sesión operador
         self.request.session.pop('proceso_operador_id', None)
-        # --- FIN LÓGICA AÑADIDA ---
         
         try:
             with transaction.atomic():
-                # El resto de la lógica de guardado se mantiene igual
                 form.instance.tecnico = self.request.user
                 form.instance.unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
                 
                 checklist_obj = form.save(commit=False)
                 
+                # Guardado manual de evidencias de daños a S3
                 fecha_actual = timezone.now()
                 fecha_str = fecha_actual.strftime('%Y-%m-%d')
                 
+                # Iteramos solo sobre las fotos que vienen en el request (Evidencias de daños)
                 for field_name, archivo in self.request.FILES.items():
                     _nombre_base, extension = os.path.splitext(archivo.name)
                     s3_path = f"flota/checklists/{checklist_obj.unidad.nombre}/{fecha_str}/{field_name}{extension}"
                     
-                    ruta_guardada = _subir_archivo_a_s3(archivo, s3_path)
+                    ruta_guardada = _subir_archivo_a_s3(archivo, s3_path) #
                     
                     if ruta_guardada:
                         setattr(checklist_obj, field_name, ruta_guardada)
                     else:
-                        messages.error(self.request, f"Error al subir el archivo {field_name}.")
+                        messages.error(self.request, f"Error al subir la evidencia {field_name}.")
                         raise Exception(f"Fallo al subir {field_name}")
                 
                 checklist_obj.save()
             
             self.request.session['proceso_checklist_id'] = checklist_obj.id
-            messages.success(self.request, "Checklist guardado. Ahora, por favor, complete la inspección de llantas.")
+            messages.success(self.request, "Checklist guardado. Continúe con la inspección de llantas.")
             
             return redirect('proceso-llantas', unidad_pk=self.kwargs['unidad_pk'])
 
@@ -1370,43 +1350,42 @@ class ProcesoChecklistView(IniciaProcesoRequiredMixin, FormView):
             return self.form_invalid(form)
         
 class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
-    """Step 3 (Common): Fill out Tire form and send to PENDING."""
+    """Paso 3: Llenar formato de llantas. SE HA ELIMINADO LA CAPTURA DE KM."""
     template_name = 'llantas_form_unificado.html'
 
     def dispatch(self, request, *args, **kwargs):
         if 'proceso_checklist_id' not in request.session:
-            messages.error(request, 'Error: You must complete the checklist before continuing.')
+            messages.error(request, 'Error: Debe completar el checklist antes de continuar.')
             return redirect('tecnico-seleccionar-unidad')
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
+        
+        # FormSet de llantas
         LlantaFormSet = formset_factory(LlantaDetalleForm, extra=6, max_num=6)
         posiciones_llantas = [{'posicion': f'Posición {i}'} for i in range(1, 7)]
-        context['titulo'] = f"Step 2: Tire Format for {unidad.nombre}"
+        
+        context['titulo'] = f"Paso 2: Inspección de Llantas - {unidad.nombre}"
         context['unidad'] = unidad
-        context['km_form'] = LlantasKmForm(initial={'km': unidad.km_actual}, unidad=unidad)
+        # NOTA: Ya no pasamos 'km_form' porque se eliminó ese requisito aquí.
         context['formset'] = LlantaFormSet(initial=posiciones_llantas, prefix='llantas')
         context['fecha_actual'] = date.today()
         return context
 
     def post(self, request, *args, **kwargs):
         unidad = get_object_or_404(Unidad, pk=self.kwargs['unidad_pk'])
-        LlantaFormSet = formset_factory(LlantaDetalleForm, extra=6, max_num=6)
         
-        km_form = LlantasKmForm(request.POST, unidad=unidad)
+        # Solo procesamos el FormSet de llantas
+        LlantaFormSet = formset_factory(LlantaDetalleForm, extra=6, max_num=6)
         formset = LlantaFormSet(request.POST, prefix='llantas')
 
-        if not km_form.is_valid() or not formset.is_valid():
-            messages.error(request, 'Por favor, corrija los errores marcados en rojo.')
-            
-            # --- (código de diagnóstico) ...
-
+        if not formset.is_valid():
+            messages.error(request, 'Por favor, corrija los errores en las llantas.')
             context = {
-                'titulo': f"Step 2: Tire Format for {unidad.nombre}",
+                'titulo': f"Paso 2: Inspección de Llantas - {unidad.nombre}",
                 'unidad': unidad,
-                'km_form': km_form,
                 'formset': formset,
                 'fecha_actual': date.today(),
             }
@@ -1414,31 +1393,35 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
 
         checklist_id = request.session.get('proceso_checklist_id')
         if not checklist_id:
-            messages.error(request, "La sesión ha expirado. Por favor, inicie de nuevo.")
+            messages.error(request, "La sesión ha expirado.")
             return redirect('tecnico-seleccionar-unidad')
 
         try:
             with transaction.atomic():
                 checklist_obj = get_object_or_404(ChecklistInspeccion, pk=checklist_id)
-                km_llantas = km_form.cleaned_data['km']
+                
+                # Crear la inspección de llantas (SIN KM)
                 llantas_inspeccion_obj = LlantasInspeccion.objects.create(
-                    unidad=unidad, tecnico=request.user, km=km_llantas
+                    unidad=unidad, 
+                    tecnico=request.user
+                    # km=... SE ELIMINÓ DE AQUÍ
                 )
+
+                # Guardar detalles
                 for form_data in formset.cleaned_data:
                     if form_data and form_data.get('mm'):
                         LlantaDetalle.objects.create(inspeccion=llantas_inspeccion_obj, **form_data)
                 
-                # Aquí se crea el ProcesoCarga
+                # Crear ProcesoCarga en PENDIENTE
                 proceso_carga_obj = ProcesoCarga.objects.create(
                     unidad=unidad, checklist=checklist_obj, inspeccion_llantas=llantas_inspeccion_obj, 
                     tecnico_inicia=request.user, status='PENDIENTE'
                 )
                 
-                # ========= INICIO DE LÓGICA AÑADIDA (EN_PROCESO) =========
+                # Actualizar estado de AsignacionRevision
                 try:
                     asignacion_del_dia = AsignacionRevision.objects.get(
                         unidad=proceso_carga_obj.unidad,
-                        # USA LA HORA LOCAL PARA OBTENER LA FECHA
                         fecha_revision=timezone.localdate(proceso_carga_obj.fecha_inicio),
                         status='PENDIENTE' 
                     )
@@ -1446,18 +1429,9 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
                     asignacion_del_dia.save()
                 except AsignacionRevision.DoesNotExist:
                     pass 
-                # ========= FIN DE LA LÓGICA AÑADIDA =========
-                
-                # ========================================================
-                # === LÍNEA DE ACTUALIZACIÓN DE KM COMENTADA ===
-                # ========================================================
-                # if km_llantas > unidad.km_actual:
-                #     unidad.km_actual = km_llantas
-                #     unidad.save()
-                # ========================================================
 
             request.session.pop('proceso_checklist_id', None)
-            messages.success(request, f"Proceso para {unidad.nombre} enviado a pendientes.")
+            messages.success(request, f"Proceso para {unidad.nombre} enviado a pendientes de carga.")
             
             if es_encargado(request.user):
                 return redirect('encargado-pendientes-list')
@@ -1465,9 +1439,8 @@ class ProcesoLlantasView(IniciaProcesoRequiredMixin, TemplateView):
         
         except Exception as e:
             messages.error(request, f"Ocurrió un error inesperado al guardar: {e}.")
-            context = {'km_form': km_form, 'formset': formset}
-            return self.render_to_response(context)
-
+            return self.render_to_response({'formset': formset, 'unidad': unidad})
+        
 class EncargadoPendientesListView(EncargadoRequiredMixin, ListView):
     """Página principal del Encargado: Muestra unidades pendientes."""
     model = ProcesoCarga
@@ -1506,8 +1479,11 @@ class EncargadoPendientesListView(EncargadoRequiredMixin, ListView):
         return super().dispatch(request, *args, **kwargs)
 
 class EncargadoProcesoDieselView(EncargadoRequiredMixin, FormView):
-    """Manager fills in the Diesel data."""
-    form_class = CargaDieselForm # Usa nuestro formulario inteligente
+    """
+    Paso 3: Carga de Diésel. 
+    AHORA INCLUYE: Foto Odómetro (OCR), Foto Sticker, y captura de KM.
+    """
+    form_class = CargaDieselForm
     template_name = 'generic_form.html'
 
     def get_proceso(self):
@@ -1516,17 +1492,13 @@ class EncargadoProcesoDieselView(EncargadoRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         proceso = self.get_proceso()
-        context['titulo'] = f"Step 3: Diesel Load for {proceso.unidad.nombre}"
+        context['titulo'] = f"Paso 3: Carga Diésel y Fotos ({proceso.unidad.nombre})"
         context['url_cancelar'] = reverse('encargado-pendientes-list')
         return context
 
     def get_form_kwargs(self):
-        """
-        Esta es la función clave. Pasa la instancia de la unidad al formulario.
-        """
         kwargs = super().get_form_kwargs()
         proceso = self.get_proceso()
-        # Aquí se inyecta la unidad, lo que permite la lógica en el __init__ del form.
         kwargs['unidad'] = proceso.unidad
         return kwargs
     
@@ -1536,62 +1508,60 @@ class EncargadoProcesoDieselView(EncargadoRequiredMixin, FormView):
         return {
             'unidad': proceso.unidad,
             'operador': proceso.checklist.operador,
-            'km_actual': proceso.inspeccion_llantas.km,
+            'km_actual': None, # Se debe llenar vía OCR o manual aquí
             'persona_relleno': self.request.user.get_full_name() or self.request.user.username,
             'cinchos_anteriores': ultima_carga.cinchos_actuales if ultima_carga else "",
         }
 
     def form_valid(self, form):
         diesel_data = form.cleaned_data
-        proceso = self.get_proceso() # Necesario para la ruta S3
+        proceso = self.get_proceso()
         fecha_str = timezone.now().strftime('%Y-%m-%d')
 
-        # --- INICIO: Lógica de subida manual de archivos ---
+        # --- LÓGICA DE SUBIDA DE FOTOS MANUAL (S3) ---
+        # Incluye Odómetro, Sticker, Motor, Thermo
+        lista_fotos = ['foto_odometro', 'foto_sticker', 'foto_motor', 'foto_thermo']
+
         try:
-            foto_motor_file = self.request.FILES.get('foto_motor')
-            foto_thermo_file = self.request.FILES.get('foto_thermo')
-
-            if foto_motor_file:
-                _nombre_base, extension = os.path.splitext(foto_motor_file.name)
-                s3_path = f"flota/cargas_diesel/{proceso.unidad.nombre}/{fecha_str}/motor{extension}"
-                ruta_guardada = _subir_archivo_a_s3(foto_motor_file, s3_path)
-                if ruta_guardada:
-                    diesel_data['foto_motor'] = ruta_guardada
-                else:
-                    messages.error(self.request, "Error al subir la foto del motor.")
-                    return self.form_invalid(form)
-
-            if foto_thermo_file:
-                _nombre_base, extension = os.path.splitext(foto_thermo_file.name)
-                s3_path = f"flota/cargas_diesel/{proceso.unidad.nombre}/{fecha_str}/thermo{extension}"
-                ruta_guardada = _subir_archivo_a_s3(foto_thermo_file, s3_path)
-                if ruta_guardada:
-                    diesel_data['foto_thermo'] = ruta_guardada
-                else:
-                    messages.error(self.request, "Error al subir la foto del thermo.")
-                    return self.form_invalid(form)
+            for nombre_campo in lista_fotos:
+                archivo = self.request.FILES.get(nombre_campo)
+                if archivo:
+                    # Definir carpeta destino (ej: flota/cargas_diesel/UnidadX/2023-10-20/odometro.jpg)
+                    _nombre, ext = os.path.splitext(archivo.name)
+                    nombre_limpio = nombre_campo.replace('foto_', '') # odometro, sticker...
+                    
+                    s3_path = f"flota/cargas_diesel/{proceso.unidad.nombre}/{fecha_str}/{nombre_limpio}{ext}"
+                    
+                    ruta_guardada = _subir_archivo_a_s3(archivo, s3_path) #
+                    
+                    if ruta_guardada:
+                        diesel_data[nombre_campo] = ruta_guardada
+                    else:
+                        messages.error(self.request, f"Error al subir la imagen: {nombre_campo}")
+                        return self.form_invalid(form)
         
         except Exception as e:
-            messages.error(self.request, f"Ocurrió un error al procesar las imágenes: {e}")
+            messages.error(self.request, f"Error crítico procesando imágenes: {e}")
             return self.form_invalid(form)
-        # --- FIN: Lógica de subida manual de archivos ---
 
+        # Preparar datos para sesión
         diesel_data['operador_id'] = diesel_data.pop('operador').id
         if 'unidad' in diesel_data: del diesel_data['unidad']
         
+        # Serializar decimales y objetos de archivo vacíos
         for key, value in diesel_data.items():
             if isinstance(value, Decimal):
                 diesel_data[key] = str(value)
-            # --- AÑADIDO: Asegurar que los campos ImageField (None) no den error ---
             elif isinstance(value, models.fields.files.ImageFieldFile):
                 if not value:
                     diesel_data[key] = None
 
+        # Guardar en sesión para el siguiente paso (Urea)
         self.request.session[f'diesel_data_proceso_{self.kwargs["proceso_pk"]}'] = diesel_data
         return redirect('encargado-proceso-urea', proceso_pk=self.kwargs['proceso_pk'])
 
 class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
-    """Manager fills in Urea and completes the process."""
+    """Paso 4: Carga de Urea y Finalización. Actualiza el KM de la unidad."""
     form_class = CargaUreaForm
     template_name = 'generic_form.html'
 
@@ -1601,33 +1571,20 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         proceso = self.get_proceso()
-        context['titulo'] = f"Paso 4: Carga de Urea y Finalizar para {proceso.unidad.nombre}"
+        context['titulo'] = f"Paso 4: Carga de Urea y Finalizar ({proceso.unidad.nombre})"
         context['url_cancelar'] = reverse('encargado-pendientes-list')
         return context
     
     def post(self, request, *args, **kwargs):
-        """
-        Interceptamos el POST para imprimir y MOSTRAR los errores si el formulario es inválido.
-        """
         form = self.get_form()
         if form.is_valid():
             return self.form_valid(form)
         else:
-            # Imprimir los errores en la consola
-            print("=====================================================")
-            print("==> ERROR: EL FORMULARIO DE UREA ES INVÁLIDO <==")
-            print(form.errors.as_json())
-            print("=====================================================")
-
-            # Construir un mensaje de error detallado para mostrar en la pantalla
-            error_message = "El formulario contiene errores. "
+            # Debugging y mensajes de error
+            error_message = "El formulario contiene errores: "
             for field, errors in form.errors.items():
-                clean_field = field.replace('_', ' ').capitalize()
-                error_list = '; '.join(errors)
-                error_message += f"Campo '{clean_field}': {error_list}. "
-            
+                error_message += f"{field}: {'; '.join(errors)}. "
             messages.error(request, error_message)
-            
             return self.form_invalid(form)
 
     def form_valid(self, form):
@@ -1636,87 +1593,69 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
         diesel_data = self.request.session.get(diesel_data_key)
 
         if not diesel_data:
-            messages.error(self.request, "Error de Sesión: No se encontraron los datos del diésel. Por favor, vuelva a empezar desde el paso anterior.")
+            messages.error(self.request, "Error de sesión: Datos de diésel perdidos. Reinicie desde el paso anterior.")
             return redirect('encargado-proceso-diesel', proceso_pk=proceso.pk)
 
-        # Convertir valores decimales desde la sesión de forma segura
+        # Recuperar decimales
         for campo in ['lts_diesel', 'lts_thermo', 'hrs_thermo', 'costo']:
             if campo in diesel_data and diesel_data[campo] is not None:
-                try:
-                    diesel_data[campo] = Decimal(diesel_data[campo])
-                except (TypeError, ValueError):
-                    messages.error(self.request, f"Error de datos de sesión: El valor para '{campo}' no es válido.")
-                    return self.form_invalid(form)
+                diesel_data[campo] = Decimal(diesel_data[campo])
 
         try:
-            # Esta variable nos dirá si necesitamos recalcular urea
             se_agrego_urea = False
 
             with transaction.atomic():
                 operador_id = diesel_data.pop('operador_id', None)
-                if not operador_id:
-                    raise ValueError("No se encontró el ID del operador en los datos de la sesión.")
-                
                 operador = get_object_or_404(Operador, pk=operador_id)
                 
-                # Crear la carga de diésel (ya no dispara el recálculo)
-                carga_diesel_obj = CargaDiesel.objects.create(unidad=proceso.unidad, operador=operador, **diesel_data)
+                # 1. Crear la Carga de Diésel (Ahora contiene el KM, fotos Odómetro y Sticker)
+                carga_diesel_obj = CargaDiesel.objects.create(
+                    unidad=proceso.unidad, 
+                    operador=operador, 
+                    **diesel_data
+                )
                 
-                # ========================================================
-                # === INICIO: LÓGICA DE ACTUALIZACIÓN DE KM MAESTRO ===
-                # ========================================================
-                km_de_la_carga = carga_diesel_obj.km_actual
-                unidad = proceso.unidad
-                if km_de_la_carga > unidad.km_actual:
-                    unidad.km_actual = km_de_la_carga
-                    unidad.save()
-                # ========================================================
-                # === FIN: LÓGICA DE ACTUALIZACIÓN DE KM MAESTRO ===
-                # ========================================================
-
+                # 2. ACTUALIZAR EL KILOMETRAJE DE LA UNIDAD (Fuente: CargaDiesel)
+                km_registrado = carga_diesel_obj.km_actual
+                if km_registrado > proceso.unidad.km_actual:
+                    proceso.unidad.km_actual = km_registrado
+                    proceso.unidad.save()
+                
+                # 3. Procesar Carga de Urea (si hubo)
                 carga_urea_obj = None
-                litros_urea_cargados = form.cleaned_data.get('litros_cargados')
+                litros_urea = form.cleaned_data.get('litros_cargados')
                 
-                # Solo procesar si el usuario ingresó un valor numérico mayor a cero
-                if litros_urea_cargados and litros_urea_cargados > 0:
+                if litros_urea and litros_urea > 0:
                     urea_obj = form.save(commit=False)
                     urea_obj.unidad = proceso.unidad
                     
-                    # --- INICIO: LÓGICA DE SUBIDA DE FOTO UREA ---
                     foto_urea_file = self.request.FILES.get('foto_urea')
                     if foto_urea_file:
                         fecha_str = timezone.now().strftime('%Y-%m-%d')
-                        _nombre_base, extension = os.path.splitext(foto_urea_file.name)
-                        s3_path = f"flota/cargas_urea/{proceso.unidad.nombre}/{fecha_str}/urea{extension}"
-                        ruta_guardada = _subir_archivo_a_s3(foto_urea_file, s3_path)
-                        
-                        if ruta_guardada:
-                            urea_obj.foto_urea = ruta_guardada
+                        _nombre, ext = os.path.splitext(foto_urea_file.name)
+                        s3_path = f"flota/cargas_urea/{proceso.unidad.nombre}/{fecha_str}/urea{ext}"
+                        ruta = _subir_archivo_a_s3(foto_urea_file, s3_path) #
+                        if ruta:
+                            urea_obj.foto_urea = ruta
                         else:
-                            messages.error(self.request, "Error al subir la foto de la bomba de urea.")
-                            # Abortar la transacción atómica
-                            raise Exception("Fallo al subir foto_urea")
-                    # --- FIN: LÓGICA DE SUBIDA DE FOTO UREA ---
-
-                    urea_obj.save() # (ya no dispara el recálculo)
+                             raise Exception("Fallo al subir foto urea")
+                    
+                    urea_obj.save()
                     carga_urea_obj = urea_obj
-                    se_agrego_urea = True # Marcamos para recalcular después
+                    se_agrego_urea = True
 
-                # Actualizar y finalizar el proceso principal
+                # 4. Finalizar ProcesoCarga
                 proceso.carga_diesel = carga_diesel_obj
                 proceso.carga_urea = carga_urea_obj
                 proceso.encargado_finaliza = self.request.user
-                
-                proceso.fecha_fin = timezone.now() # Usar timezone.now()
-                
+                proceso.fecha_fin = timezone.now()
                 proceso.status = 'COMPLETADO'
                 proceso.save()
                 
-                # Lógica para actualizar la AsignacionRevision
+                # 5. Actualizar AsignacionRevision a TERMINADO
                 try:
                     asignacion_del_dia = AsignacionRevision.objects.get(
                         unidad=proceso.unidad,
-                        # USA LA HORA LOCAL PARA OBTENER LA FECHA
                         fecha_revision=timezone.localdate(proceso.fecha_inicio),
                         status__in=['PENDIENTE', 'EN_PROCESO'] 
                     )
@@ -1725,26 +1664,23 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
                 except AsignacionRevision.DoesNotExist:
                     pass 
 
-            # ========= FIN DE LA TRANSACCIÓN ATÓMICA =========
+            # Fin Transacción
             
-            # Ahora, ejecutamos las funciones de recálculo:
+            # Recálculos de costos
             recalcular_costos_cargas_diesel() 
-            
             if se_agrego_urea:
                 recalcular_costos_cargas_urea()
 
-            # Limpiar la sesión al finalizar exitosamente
+            # Limpiar sesión
             if diesel_data_key in self.request.session:
                 del self.request.session[diesel_data_key]
-                self.request.session.modified = True
             
-            messages.success(self.request, f"¡Éxito! Proceso para {proceso.unidad.nombre} finalizado correctamente.")
+            messages.success(self.request, f"Proceso finalizado para {proceso.unidad.nombre}.")
             return redirect('encargado-pendientes-list')
 
         except Exception as e:
-            # Capturar cualquier error inesperado durante el guardado y mostrarlo
-            print(f"ERROR INESPERADO AL FINALIZAR EL PROCESO: {e}") # Log para el desarrollador
-            messages.error(self.request, f"Error inesperado al guardar los datos: {e}. Por favor, contacte al administrador.")
+            print(f"ERROR CRÍTICO EN UREA/FINALIZAR: {e}")
+            messages.error(self.request, f"Error al guardar: {e}")
             return self.form_invalid(form)
     
     
@@ -3731,24 +3667,21 @@ def laboratorio_ocr_view(request):
     })
 
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from .utils_vision import detectar_texto_en_imagen
 
 @login_required
 @require_POST
 def api_ocr_lectura(request):
-    """
-    Recibe una imagen vía POST y devuelve el número detectado.
-    """
-    if 'imagen' not in request.FILES:
-        return JsonResponse({'status': 'error', 'message': 'No se envió imagen'}, status=400)
+    imagen = request.FILES.get('imagen')
+    if not imagen:
+        return JsonResponse({'status': 'error', 'message': 'No image provided'}, status=400)
     
-    imagen = request.FILES['imagen']
-    
-    # Llamamos a nuestra función de utilidad
-    numero_detectado = detectar_texto_en_imagen(imagen)
-    
-    if numero_detectado is not None:
-        return JsonResponse({'status': 'ok', 'numero': numero_detectado})
-    else:
-        return JsonResponse({'status': 'error', 'message': 'No se detectaron números claros'}, status=200)
+    try:
+        numero = detectar_texto_en_imagen(imagen)
+        if numero is not None:
+            return JsonResponse({'status': 'ok', 'numero': numero})
+        else:
+            return JsonResponse({'status': 'error', 'message': 'No text detected'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

@@ -106,58 +106,43 @@ class OperadorForm(forms.ModelForm):
 
 class CargaDieselForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        self.unidad_instance = kwargs.pop('unidad', None)
-        
-        # --- LÍNEA AÑADIDA ---
-        self.user = user # Guardamos el usuario
-        # --- FIN LÍNEA AÑADIDA ---
-
-        if 'instance' in kwargs and kwargs['instance']:
-            self.unidad_instance = kwargs['instance'].unidad
-
         super().__init__(*args, **kwargs)
         
-        if 'foto_motor' in self.fields:
-            self.fields['foto_motor'].widget.attrs.update({
-                'class': 'form-control form-control-sm',
+        # Configuración para la FOTO DEL ODÓMETRO (Trigger del OCR)
+        if 'foto_odometro' in self.fields:
+            self.fields['foto_odometro'].widget.attrs.update({
+                'class': 'form-control',
                 'accept': 'image/*',
-                'capture': 'environment'
+                'capture': 'environment',
+                'id': 'input_foto_odometro' # ID CLAVE PARA EL JAVASCRIPT
             })
-            self.fields['foto_motor'].required = False # Asegura que sea opcional
-            # --- MODIFICACIÓN DE ETIQUETA ---
-            self.fields['foto_motor'].label = "Foto Bomba Diésel Motor"
+            self.fields['foto_odometro'].label = "📸 Foto Odómetro (Detectar KM)"
+            self.fields['foto_odometro'].required = True # Ahora es obligatorio aquí
 
-        if 'foto_thermo' in self.fields:
-            self.fields['foto_thermo'].widget.attrs.update({
-                'class': 'form-control form-control-sm',
-                'accept': 'image/*',
-                'capture': 'environment'
+        if 'km_actual' in self.fields:
+            self.fields['km_actual'].widget.attrs.update({
+                'class': 'form-control',
+                'id': 'input_km_actual', # ID PARA QUE EL JS LO LLENE
+                'readonly': False # Permitir corrección manual si el OCR falla
             })
-            self.fields['foto_thermo'].required = False # Asegura que sea opcional
-            # --- MODIFICACIÓN DE ETIQUETA ---
-            self.fields['foto_thermo'].label = "Foto Bomba Diésel Thermo"
 
-        if self.unidad_instance and self.unidad_instance.tipo == 'S':
-            if 'lts_thermo' in self.fields:
-                del self.fields['lts_thermo']
-            if 'hrs_thermo' in self.fields:
-                del self.fields['hrs_thermo']
-        
-        if user and user.groups.filter(name='Tecnico').exists():
-            if 'unidad' in self.fields:
-                self.fields['unidad'].disabled = True
+        # Configuración para el resto de fotos
+        for campo_foto in ['foto_motor', 'foto_thermo', 'foto_sticker']:
+            if campo_foto in self.fields:
+                self.fields[campo_foto].widget.attrs.update({
+                    'class': 'form-control',
+                    'accept': 'image/*',
+                    'capture': 'environment'
+                })
 
-        if 'cinchos_anteriores' in self.fields:
-            self.fields['cinchos_anteriores'].required = False
-            if self.unidad_instance:
-                ya_existen_cinchos = CargaDiesel.objects.filter(
-                    unidad=self.unidad_instance
-                ).exclude(cinchos_actuales__exact='').exists()
-                if ya_existen_cinchos:
-                    self.fields['cinchos_anteriores'].widget.attrs['readonly'] = True
-                    self.fields['cinchos_anteriores'].widget.attrs['class'] = 'form-control-plaintext'
-
+    class Meta:
+        model = CargaDiesel
+        fields = '__all__'
+        exclude = ['fecha', 'rendimiento', 'costo']
+        widgets = {
+            'unidad': forms.Select(attrs={'class': 'form-control'}),
+            'operador': forms.Select(attrs={'class': 'form-control'}),
+        }
 
     def clean(self):
         cleaned_data = super().clean()
@@ -330,46 +315,6 @@ class ChecklistInspeccionForm(forms.ModelForm):
         elif self.instance and self.instance.pk:
             # Caso 2: Al editar (la unidad ya existe en la 'instance')
             unidad = self.instance.unidad
-
-        # 2. Configurar foto_odometro (sigue siendo obligatoria)
-        if 'foto_odometro' in self.fields:
-            self.fields['foto_odometro'].widget.attrs.update({
-                'class': 'form-control',
-                'accept': 'image/*',
-                'capture': 'environment',
-                'required': True 
-            })
-            self.fields['foto_odometro'].label = "Foto Clara del Odómetro"
-        
-        # 3. Configurar foto_thermo_hrs (LÓGICA CORREGIDA)
-        if 'foto_thermo_hrs' in self.fields:
-            self.fields['foto_thermo_hrs'].widget.attrs.update({
-                'class': 'form-control',
-                'accept': 'image/*',
-                'capture': 'environment',
-            })
-            self.fields['foto_thermo_hrs'].label = "Foto Clara de Horas Thermo"
-            
-            # --- ESTA ES LA CORRECCIÓN CLAVE ---
-            # Si la unidad es de tipo 'S' (Seca),
-            # hacemos que este campo NO sea obligatorio.
-            if unidad and unidad.tipo == 'S':
-                self.fields['foto_thermo_hrs'].required = False
-            else:
-                # Para 'R' y 'A' (Refrigeradas), SÍ es obligatorio
-                self.fields['foto_thermo_hrs'].required = True
-        
-        # 4. Configurar foto_sticker (opcional)
-        if 'foto_sticker' in self.fields:
-             self.fields['foto_sticker'].widget.attrs.update({
-                'class': 'form-control',
-                'accept': 'image/*',
-                'capture': 'environment',
-            })
-             self.fields['foto_sticker'].label = "Foto Clara del sticker (si aplica)"
-             self.fields['foto_sticker'].required = False # Nos aseguramos que sea opcional
-        
-        # --- FIN DE LÓGICA MODIFICADA ---
         
         # Lógica existente para deshabilitar la unidad y poner estilos
         if 'unidad' in self.initial:
@@ -402,54 +347,6 @@ class ChecklistInspeccionForm(forms.ModelForm):
                     'capture': 'environment'
                 })
                 
-class LlantasKmForm(forms.Form):
-    """Formulario para capturar y validar el kilometraje de la unidad."""
-    
-    # --- INICIO DE LA MODIFICACIÓN 1 ---
-    km = forms.IntegerField(
-        label="Kilometraje de la Unidad",
-        widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        required=False  # <-- AÑADIR ESTA LÍNEA
-    )
-    # --- FIN DE LA MODIFICACIÓN 1 ---
-
-    def __init__(self, *args, **kwargs):
-        # Esta parte está bien, se usa para la validación
-        self.unidad = kwargs.pop('unidad', None) 
-        self.user = kwargs.pop('user', None) 
-        super().__init__(*args, **kwargs)
-        
-    # ==================================================
-    # === INICIO DE LA MODIFICACIÓN 2 ===
-    # ==================================================
-    #
-    # --- ELIMINA O COMENTA TODO EL MÉTODO 'clean_km' ---
-    #
-    # def clean_km(self):
-    #     km_actual_form = self.cleaned_data.get('km')
-    #     
-    #     if not self.unidad:
-    #         return km_actual_form # No podemos validar sin la unidad
-    #
-    #     # Buscamos la última carga de DIÉSEL, que es la que marca el KM más fiable
-    #     ultima_carga_diesel = CargaDiesel.objects.filter(unidad=self.unidad).order_by('-fecha').first()
-    #     
-    #     if ultima_carga_diesel:
-    #         is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
-    #         
-    #         if not is_admin:
-    #             if km_actual_form is not None and km_actual_form <= ultima_carga_diesel.km_actual:
-    #                 # Lanzamos el mismo error, pero ahora en el formulario de Llantas
-    #                 raise ValidationError(
-    #                     f"El kilometraje debe ser mayor al último registrado en Diésel ({ultima_carga_diesel.km_actual} km).",
-    #                     code='invalid_km'
-    #                 )
-    #                         
-    #     return km_actual_form
-    #
-    # ==================================================
-    # === FIN DE LA MODIFICACIÓN 2 ===
-    # ==================================================
 
 class LlantasInspeccionForm(forms.ModelForm):
     """Formulario para la cabecera de la inspección de llantas (Admin)."""

@@ -5,7 +5,7 @@ from django.contrib.auth import views as auth_views
 from .views import *
 from .views import delete_pieza_de_tarea
 from .views import download_single_revision_pdf # <-- Este es el nuevo nombre
-
+from .views import api_ocr_lectura # Asegúrate de crear esta vista wrapper
 
 urlpatterns = [
     # =============================================================
@@ -133,4 +133,5 @@ urlpatterns = [
     path('tareas/<int:tarea_pk>/add-pieza/', add_pieza_a_tarea, name='add-pieza-a-tarea'),
     path('tareas/pieza/<int:pieza_pk>/eliminar/', delete_pieza_de_tarea, name='delete-pieza-de-tarea'),
     path('revisiones/<int:pk>/reporte-pdf/', download_single_revision_pdf, name='single-revision-reporte-pdf'),
-    path('pruebas/laboratorio-ocr/', laboratorio_ocr_view, name='laboratorio-ocr'),]
+    path('pruebas/laboratorio-ocr/', laboratorio_ocr_view, name='laboratorio-ocr'),
+    path('api/ocr-lectura/', api_ocr_lectura, name='api-ocr-lectura'),]

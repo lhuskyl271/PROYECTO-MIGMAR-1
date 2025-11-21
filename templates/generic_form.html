@@ -6,6 +6,7 @@
     <div class="row justify-content-center">
         <div class="col-12 col-lg-10 col-xl-9">
             <div class="card shadow-lg border-0 rounded-3 overflow-hidden">
+                {# --- Encabezado de la Tarjeta --- #}
                 <div class="card-header bg-primary text-white py-3 position-relative">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-circle p-2 me-3">
@@ -17,14 +18,15 @@
                         </div>
                     </div>
                     <div class="position-absolute top-0 end-0 mt-2 me-3">
-                        <span class="badge bg-light text-primary fs-6">Unidad</span>
+                        <span class="badge bg-light text-primary fs-6">Flota</span>
                     </div>
                 </div>
                 
                 <div class="card-body p-3 p-md-4">
-                    <form method="post" novalidate enctype="multipart/form-data" class="needs-validation" novalidate>
+                    <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
                         {% csrf_token %}
 
+                        {# --- Manejo de Errores Globales --- #}
                         {% if form.non_field_errors %}
                             <div class="alert alert-danger d-flex align-items-center" role="alert">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -39,14 +41,12 @@
                         <div class="row g-3 g-md-4">
                             {% for field in form.visible_fields %}
                             
-                            {# --- LÓGICA DE SECCIONAMIENTO VISUAL --- #}
+                            {# --- LÓGICA DE SECCIONAMIENTO VISUAL (Tus estilos originales) --- #}
                             {% if field.name == 'nombre' %}
                                 <div class="col-12">
                                     <div class="section-header mb-3">
                                         <div class="d-flex align-items-center">
-                                            <div class="section-icon me-2">
-                                                <i class="fas fa-truck"></i>
-                                            </div>
+                                            <div class="section-icon me-2"><i class="fas fa-truck"></i></div>
                                             <h5 class="text-primary fw-bold m-0">Información de la Unidad</h5>
                                         </div>
                                         <div class="section-divider mt-2"></div>
@@ -58,9 +58,7 @@
                                 <div class="col-12">
                                     <div class="section-header mb-3 mt-4">
                                         <div class="d-flex align-items-center">
-                                            <div class="section-icon me-2">
-                                                <i class="fas fa-cogs"></i>
-                                            </div>
+                                            <div class="section-icon me-2"><i class="fas fa-cogs"></i></div>
                                             <h5 class="text-primary fw-bold m-0">Motor y Combustible</h5>
                                         </div>
                                         <div class="section-divider mt-2"></div>
@@ -72,9 +70,7 @@
                                 <div class="col-12" data-section-wrapper="thermo">
                                     <div class="section-header mb-3 mt-4">
                                         <div class="d-flex align-items-center">
-                                            <div class="section-icon me-2">
-                                                <i class="fas fa-thermometer-half"></i>
-                                            </div>
+                                            <div class="section-icon me-2"><i class="fas fa-thermometer-half"></i></div>
                                             <h5 class="text-primary fw-bold m-0">Información del Thermo</h5>
                                         </div>
                                         <div class="section-divider mt-2"></div>
@@ -83,11 +79,13 @@
                             {% endif %}
                             {# --- FIN DE LÓGICA DE SECCIONAMIENTO --- #}
 
+                            {# --- Renderizado del Campo Individual --- #}
                             <div class="col-12 col-md-6 mb-3" data-field-wrapper-for="{{ field.name }}">
                                 <div class="form-floating">
                                     {% if field.field.disabled %}
                                         {% render_field field class="form-control-plaintext bg-light px-3 py-2 rounded" readonly=True placeholder=field.label %}
                                     {% else %}
+                                        {# Aquí preservamos los IDs (input_foto_odometro, etc) definidos en forms.py #}
                                         {% with field_class=field.field.widget.attrs.class|default:"form-control" %}
                                             {% render_field field class=field_class placeholder=field.label %}
                                         {% endwith %}
@@ -95,6 +93,13 @@
                                     <label for="{{ field.id_for_label }}" class="fw-semibold">{{ field.label }}</label>
                                 </div>
                                 
+                                {# Spinner de carga específico para el campo KM (oculto por defecto) #}
+                                {% if field.name == 'km_actual' %}
+                                    <div id="ocr-loading-spinner" class="d-none mt-2 text-primary">
+                                        <small><i class="fas fa-spinner fa-spin me-1"></i> Procesando imagen con IA...</small>
+                                    </div>
+                                {% endif %}
+
                                 {% if field.help_text %}
                                     <small class="form-text text-muted d-block mt-1 ps-1">
                                         <i class="fas fa-info-circle me-1"></i>{{ field.help_text }}
@@ -102,7 +107,7 @@
                                 {% endif %}
 
                                 {% for error in field.errors %}
-                                    <div class="invalid-feedback d-flex align-items-center mt-1">
+                                    <div class="invalid-feedback d-flex align-items-center mt-1" style="display:block;">
                                         <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
                                     </div>
                                 {% endfor %}
@@ -110,12 +115,20 @@
                             {% endfor %}
                         </div>
                         
+                        {# --- Botones de Acción --- #}
                         <div class="d-flex flex-column flex-sm-row justify-content-end border-top pt-4 mt-4 gap-2">
-                            <a href="{% url 'unidad-list' %}" class="btn btn-outline-danger btn-lg flex-fill flex-sm-grow-0 order-2 order-sm-1">
-                                <i class="fas fa-times me-2"></i>Cancelar
-                            </a>
+                            {% if url_cancelar %}
+                                <a href="{{ url_cancelar }}" class="btn btn-outline-danger btn-lg flex-fill flex-sm-grow-0 order-2 order-sm-1">
+                                    <i class="fas fa-times me-2"></i>Cancelar
+                                </a>
+                            {% else %}
+                                <a href="javascript:history.back()" class="btn btn-outline-danger btn-lg flex-fill flex-sm-grow-0 order-2 order-sm-1">
+                                    <i class="fas fa-arrow-left me-2"></i>Volver
+                                </a>
+                            {% endif %}
+                            
                             <button type="submit" class="btn btn-success btn-lg flex-fill flex-sm-grow-0 px-4 order-1 order-sm-2">
-                                <i class="fas fa-save me-2"></i>Guardar Cambios
+                                <i class="fas fa-save me-2"></i>Guardar / Continuar
                             </button>
                         </div>
                     </form>
@@ -128,161 +141,52 @@
 
 {% block extra_js %}
 <style>
-    /* Estilos generales mejorados */
-    .card {
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08) !important;
-        border: 1px solid rgba(0, 0, 0, 0.05);
-    }
+    /* --- Estilos Generales (Tus estilos originales) --- */
+    .card { box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08) !important; border: 1px solid rgba(0, 0, 0, 0.05); }
+    .card-header { border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+    .section-header { position: relative; }
+    .section-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: rgba(13, 110, 253, 0.1); border-radius: 8px; color: #0d6efd; }
+    .section-divider { height: 2px; background: linear-gradient(90deg, #0d6efd 0%, rgba(13, 110, 253, 0.2) 100%); border-radius: 2px; }
     
-    .card-header {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    }
+    /* Inputs */
+    .form-floating > .form-control:focus, .form-floating > .form-control:not(:placeholder-shown) { padding-top: 1.625rem; padding-bottom: 0.625rem; }
+    .form-control, .form-select { border-radius: 8px; border: 1px solid #dee2e6; transition: all 0.2s ease-in-out; padding: 0.75rem 1rem; }
+    .form-control:focus, .form-select:focus { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15); }
+    .form-label { font-weight: 600; color: #495057; }
     
-    .section-header {
-        position: relative;
-    }
+    /* Transiciones */
+    [data-field-wrapper-for], [data-section-wrapper] { transition: all 0.4s ease-in-out; overflow: hidden; }
+    .field-hidden { max-height: 0 !important; opacity: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important; transform: scale(0.95); }
     
-    .section-icon {
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(13, 110, 253, 0.1);
-        border-radius: 8px;
-        color: #0d6efd;
-    }
+    /* Botones */
+    .btn { border-radius: 8px; font-weight: 600; padding: 0.75rem 1.5rem; transition: all 0.2s ease-in-out; }
+    .btn-lg { padding: 0.875rem 1.75rem; }
+    .btn-success { background: linear-gradient(135deg, #198754, #157347); border: none; }
+    .btn-success:hover { background: linear-gradient(135deg, #157347, #13653f); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(25, 135, 84, 0.3); }
     
-    .section-divider {
-        height: 2px;
-        background: linear-gradient(90deg, #0d6efd 0%, rgba(13, 110, 253, 0.2) 100%);
-        border-radius: 2px;
-    }
-    
-    /* Mejoras para campos de formulario */
-    .form-floating > .form-control:focus,
-    .form-floating > .form-control:not(:placeholder-shown) {
-        padding-top: 1.625rem;
-        padding-bottom: 0.625rem;
-    }
-    
-    .form-control, .form-select {
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-        transition: all 0.2s ease-in-out;
-        padding: 0.75rem 1rem;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
-    }
-    
-    .form-label {
-        font-weight: 600;
-        color: #495057;
-    }
-    
-    /* Transiciones para campos que se ocultan/muestran */
-    [data-field-wrapper-for], [data-section-wrapper] {
-        transition: all 0.4s ease-in-out;
-        overflow: hidden;
-    }
-    
-    .field-hidden {
-        max-height: 0 !important;
-        opacity: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-        transform: scale(0.95);
-    }
-    
-    /* Botones mejorados */
-    .btn {
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.2s ease-in-out;
-    }
-    
-    .btn-lg {
-        padding: 0.875rem 1.75rem;
-    }
-    
-    .btn-success {
-        background: linear-gradient(135deg, #198754, #157347);
-        border: none;
-    }
-    
-    .btn-success:hover {
-        background: linear-gradient(135deg, #157347, #13653f);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(25, 135, 84, 0.3);
-    }
-    
-    .btn-outline-danger {
-        border-width: 2px;
-        font-weight: 600;
-    }
-    
-    .btn-outline-danger:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
-    }
-    
-    /* Responsive adjustments */
+    /* Feedback visual OCR */
+    .ocr-success { border-color: #198754 !important; background-color: #f8fff9 !important; }
+    .ocr-loading { background-color: #fff3cd !important; }
+
+    /* Responsive */
     @media (max-width: 768px) {
-        .container-fluid {
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
-        }
-        
-        .card-body {
-            padding: 1rem !important;
-        }
-        
-        .btn {
-            width: 100%;
-            margin-bottom: 0.5rem;
-        }
-        
-        .section-header h5 {
-            font-size: 1.1rem;
-        }
-        
-        .form-control, .form-select {
-            padding: 0.875rem 1rem;
-        }
-    }
-    
-    @media (max-width: 576px) {
-        .card-header h4 {
-            font-size: 1.25rem;
-        }
-        
-        .card-header .badge {
-            font-size: 0.7rem !important;
-        }
-        
-        .section-icon {
-            width: 32px;
-            height: 32px;
-        }
+        .container-fluid { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .card-body { padding: 1rem !important; }
+        .btn { width: 100%; margin-bottom: 0.5rem; }
     }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
+    // =======================================================
+    // 1. LÓGICA DE VISIBILIDAD DE CAMPOS (Unidades)
+    // =======================================================
     const toggleElementVisibility = (selector, show) => {
         const element = document.querySelector(selector);
         if (element) {
-            if (show) {
-                element.classList.remove('field-hidden');
-            } else {
-                element.classList.add('field-hidden');
-            }
+            if (show) element.classList.remove('field-hidden');
+            else element.classList.add('field-hidden');
         }
     };
 
@@ -292,35 +196,93 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!tipoUnidadSelect || !combustibleCompartidoSelect) return;
 
-        // Campos descriptivos de thermo (los que no son el tanque)
-        const camposThermoDescriptivos = [
-            'thermo_marca', 'thermo_serie', 'thermo_modelo', 'thermo_tipo_cierre'
-        ];
+        const camposThermoDescriptivos = ['thermo_marca', 'thermo_serie', 'thermo_modelo', 'thermo_tipo_cierre'];
 
         const actualizarVisibilidad = () => {
             const tipo = tipoUnidadSelect.value;
             const esCompartido = combustibleCompartidoSelect.value === 'True';
             const esRefrigerada = (tipo === 'R' || tipo === 'A');
 
-            // 1. Mostrar/Ocultar la sección del Thermo (Marca, Serie, etc.)
             toggleElementVisibility('[data-section-wrapper="thermo"]', esRefrigerada);
             camposThermoDescriptivos.forEach(field => toggleElementVisibility(`[data-field-wrapper-for="${field}"]`, esRefrigerada));
 
-            // 2. Lógica de los tanques de combustible (Ahora depende SÓLO de 'esCompartido')
             toggleElementVisibility('[data-field-wrapper-for="capacidad_total_tanque"]', esCompartido);
             toggleElementVisibility('[data-field-wrapper-for="total_tanque_diesel_motor"]', !esCompartido);
-            
-            // La visibilidad del tanque de thermo ahora solo depende de si es NO compartido.
             toggleElementVisibility('[data-field-wrapper-for="total_tanque_diesel_thermo"]', !esCompartido);
         };
 
         tipoUnidadSelect.addEventListener('change', actualizarVisibilidad);
         combustibleCompartidoSelect.addEventListener('change', actualizarVisibilidad);
-        
-        actualizarVisibilidad(); // Ejecutar al cargar la página
+        actualizarVisibilidad();
     };
 
+    // =======================================================
+    // 2. LÓGICA DE OCR (Reconocimiento de Texto)
+    // =======================================================
+    const initOCRLogic = () => {
+        const inputFoto = document.getElementById('input_foto_odometro');
+        const inputKm = document.getElementById('input_km_actual');
+        const spinner = document.getElementById('ocr-loading-spinner');
+
+        // Si no existen los inputs (ej: estamos en el form de Unidad, no en CargaDiesel), salir.
+        if (!inputFoto || !inputKm) return;
+
+        inputFoto.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 1. UI: Mostrar estado de carga
+            inputKm.value = ''; // Limpiar valor anterior
+            inputKm.placeholder = "Detectando...";
+            inputKm.classList.add('ocr-loading');
+            if(spinner) spinner.classList.remove('d-none');
+
+            // 2. Preparar datos
+            const formData = new FormData();
+            formData.append('imagen', file); // 'imagen' debe coincidir con lo que espera tu API View
+
+            // 3. Llamada AJAX a tu API
+            // NOTA: Asegúrate de tener configurada esta URL en urls.py
+            fetch('/api/ocr-lectura/', { 
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Limpiar estado de carga
+                inputKm.classList.remove('ocr-loading');
+                if(spinner) spinner.classList.add('d-none');
+
+                if (data.status === 'ok' && data.numero) {
+                    // CASO ÉXITO
+                    inputKm.value = data.numero;
+                    inputKm.classList.add('ocr-success');
+                    
+                    // Pequeño efecto visual para confirmar
+                    setTimeout(() => inputKm.classList.remove('ocr-success'), 3000);
+                } else {
+                    // CASO FALLO / NO DETECTADO
+                    console.warn("OCR Warning:", data.message);
+                    inputKm.placeholder = "Ingrese manual";
+                    // Opcional: alert("No se detectó el número. Ingréselo manualmente.");
+                }
+            })
+            .catch(error => {
+                console.error('Error OCR:', error);
+                inputKm.classList.remove('ocr-loading');
+                if(spinner) spinner.classList.add('d-none');
+                inputKm.placeholder = "Error de red";
+                alert("Error al conectar con el servicio de lectura. Ingrese el KM manualmente.");
+            });
+        });
+    };
+
+    // Inicializar ambos módulos
     initUnidadForm();
+    initOCRLogic();
 });
 </script>
 {% endblock %}
