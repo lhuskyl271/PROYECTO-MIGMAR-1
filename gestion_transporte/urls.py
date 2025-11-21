@@ -9,6 +9,7 @@ urlpatterns = [
     path('mantenimiento/', include('mantenimiento.urls', namespace='mantenimiento')),
     path('almacen/', include('almacen.urls', namespace='almacen')),
     path('rh/', include('RH.urls')),
+    path('cotizador_automatico/', include('cotizador_automatico.urls')),
     # -------------------------
 ]
 

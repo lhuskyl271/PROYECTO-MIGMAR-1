@@ -2251,11 +2251,11 @@ def download_llantas_general_excel(request):
 class AsignacionRevisionView(AdminRequiredMixin, CreateView):
     """
     Vista principal para crear asignaciones y ver la lista del día.
-    (MODIFICADA para ignorar checklists 'dummy' en el conteo de días)
+    Actualizada para manejar tareas en cualquier tipo de asignación.
     """
     model = AsignacionRevision
     form_class = AsignacionRevisionForm
-    template_name = 'asignacion_revision_form.html' # Tu plantilla
+    template_name = 'asignacion_revision_form.html'
     
     def get_success_url(self):
         # Vuelve a la misma vista, pero con la fecha de la revisión creada
@@ -2273,7 +2273,7 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # 1. Lógica de Filtro de Fecha (basado en tu HTML)
+        # 1. Lógica de Filtro de Fecha
         fecha_filtro_str = self.request.GET.get('fecha')
         if fecha_filtro_str:
             try:
@@ -2285,76 +2285,63 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
         
         context['fecha_filtro'] = fecha_filtro
 
-        # 2. Obtener Asignaciones del Día (basado en tu HTML)
+        # 2. Obtener Asignaciones del Día
         asignaciones_del_dia = AsignacionRevision.objects.filter(
             fecha_revision=fecha_filtro
         ).select_related('unidad').prefetch_related(
-            # Nombres correctos: 'checklistinspeccion_set' y 'correcciones'
-            'unidad__checklistinspeccion_set__correcciones__corregido_por' # <--- LÍNEA CORREGIDA
+            'unidad__checklistinspeccion_set__correcciones__corregido_por'
         ).order_by('unidad__nombre')
         
-        # 3. Preparar Formsets y Datos Adicionales (MODIFICADO)
+        # 3. Preparar Formsets y Datos Adicionales
+        # Ahora incluimos 'tipo_mantenimiento' en el formset
         TareaCorrectivaFormSet = inlineformset_factory(
             AsignacionRevision,
             TareaCorrectiva,
             form=TareaCorrectivaForm,
-            extra=1, # Empieza con 1 formulario vacío
+            extra=1, 
             can_delete=True,
-            fields=['refaccion', 'usuario_asignado', 'fecha_limite', 'status']
+            fields=['refaccion', 'tipo_mantenimiento', 'usuario_asignado', 'fecha_limite', 'status']
         )
         
-        # --- Obtener la fecha actual UNA SOLA VEZ fuera del bucle ---
         today = timezone.now().date()
 
         for asignacion in asignaciones_del_dia:
-            # Lógica de Mantenimiento Correctivo (MODIFICADO)
-            if asignacion.tipo_programacion == 'CORRECTIVO':
-                # ¡MODIFICACIÓN! Usamos .prefetch_related() para optimizar
-                # y traer las piezas (SalidaArticulo) y sus artículos.
-                asignacion.tareas_list = asignacion.tareas_correctivas.prefetch_related(
-                    'usuario_asignado',
-                    'piezas__articulo' # Precarga las piezas y sus artículos
-                ).all()
-                
-                asignacion.correctivo_formset = TareaCorrectivaFormSet(
-                    instance=asignacion, 
-                    prefix=f'tareas-{asignacion.pk}'
-                )
+            # --- CAMBIO PRINCIPAL: Habilitar tareas para TODOS ---
+            # Ya no filtramos por 'CORRECTIVO'. Cargamos las tareas siempre.
+            asignacion.tareas_list = asignacion.tareas_correctivas.prefetch_related(
+                'usuario_asignado',
+                'piezas__articulo' 
+            ).all()
             
-            # Lógica de Fallas (basado en tu HTML)
+            asignacion.correctivo_formset = TareaCorrectivaFormSet(
+                instance=asignacion, 
+                prefix=f'tareas-{asignacion.pk}'
+            )
+            
+            # Lógica de Fallas (Checklist)
             try:
-                # --- INICIO DE LA MODIFICACIÓN (TU NUEVO REQUERIMIENTO) ---
-                #
-                # Ahora solo buscamos el último checklist que NO sea dummy
-                #
                 latest_checklist = asignacion.unidad.checklistinspeccion_set.filter(
                     es_dummy=False
                 ).latest('fecha')
-                #
-                # --- FIN DE LA MODIFICACIÓN ---
                 
                 asignacion.latest_checklist_date = latest_checklist.fecha
                 
-                # 2. Usamos la relación correcta 'correcciones' y filtramos por 'PENDIENTE'
                 correccion_items = latest_checklist.correcciones.filter(
                     status='PENDIENTE'
                 ).select_related('corregido_por')
 
-                # 3. Construimos la lista que el template espera
                 bad_items_list_temp = []
                 for item in correccion_items:
-                    # Obtenemos la etiqueta legible del campo (ej. "Cristales")
                     try:
                         label = item.inspeccion._meta.get_field(item.nombre_campo).verbose_name.title()
                     except FieldDoesNotExist:
                         label = item.nombre_campo.replace('_', ' ').title()
                     
-                    # Añadimos los campos que el template HTML necesita
                     bad_items_list_temp.append({
                         'id': item.id,
                         'label': label,
                         'obs': item.observacion_original,
-                        'foto': item.foto_evidencia, # El template usa 'item.foto'
+                        'foto': item.foto_evidencia,
                         'status_raw': item.status,
                         'status': item.get_status_display(),
                         'comentario_admin': item.comentario_admin,
@@ -2363,59 +2350,47 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
                     })
                 asignacion.bad_items_list = bad_items_list_temp
 
-            except ChecklistInspeccion.DoesNotExist: # <-- Usamos el modelo correcto
+            except ChecklistInspeccion.DoesNotExist:
                 asignacion.latest_checklist_date = None
                 asignacion.bad_items_list = []
             except Exception as e:
-                # Captura de error general para depuración
                 print(f"Error procesando fallas para asignacion {asignacion.pk}: {e}")
                 asignacion.latest_checklist_date = None
                 asignacion.bad_items_list = []
             
             
-            # --- INICIO DE LÓGICA MODIFICADA (TU REQUERIMIENTO) ---
-            
-            # Regla 1: Siempre es proceso completo si es correctivo, preventivo, o tiene fallas.
-            if asignacion.bad_items_list or asignacion.tipo_programacion == 'CORRECTIVO' or asignacion.tipo_programacion == 'PREVENTIVO':
+            # --- CAMBIO EN REGLAS DE PROCESO COMPLETO ---
+            # Regla 1: Proceso completo si tiene fallas O TIENE TAREAS ASIGNADAS (preventivas o correctivas)
+            if asignacion.bad_items_list or asignacion.tareas_list.exists():
                 asignacion.needs_full_process = True
             else:
-                # Regla 2: Si es 'Normal', checar la antigüedad del checklist.
+                # Regla 2: Antigüedad del checklist
                 if asignacion.latest_checklist_date is None:
-                    # Si NUNCA ha tenido un checklist (real), es proceso completo.
                     asignacion.needs_full_process = True
                 else:
-                    # Calcular días desde el último checklist (real)
                     dias_desde_ultimo_check = (today - asignacion.latest_checklist_date.date()).days
-                    
                     if dias_desde_ultimo_check >= 8:
-                        # Si tiene 8 o más días, es proceso completo.
                         asignacion.needs_full_process = True
                     else:
-                        # Si tiene 7 o menos días (incluyendo 0), solo va a diésel.
                         asignacion.needs_full_process = False
-            
-            # --- FIN DE LÓGICA MODIFICADA ---
 
         context['asignaciones_del_dia'] = asignaciones_del_dia
         
-        # --- ¡NUEVA LÍNEA CRÍTICA! ---
-        # Pasamos la lista de artículos del inventario al contexto
-        # para usarla en el dropdown del modal.
-        # (Asegúrate de importar 'Articulo' de 'almacen.models')
+        # Lista de artículos para el modal de agregar piezas
         context['lista_articulos_inventario'] = Articulo.objects.filter(
             stock_total__gt=0
         ).order_by(
             'subcategoria__categoria__nombre', 'subcategoria__nombre', 'nombre'
         )
-        # --- FIN NUEVA LÍNEA ---
         
         context['titulo'] = "Asignar Revisiones de Unidades"
         
-        # 4. Lógica de Estadísticas (basado en tu HTML)
+        # 4. Lógica de Estadísticas
+        # Nota: Los estados pendientes pueden variar según tu modelo, ajusta si es necesario
         stats_qs = AsignacionRevision.objects.filter(fecha_revision=fecha_filtro)
         context['stats'] = stats_qs.aggregate(
             total=Count('id'),
-            pendientes=Count('id', filter=Q(status__in=['PENDIENTE', 'PREVENTIVO', 'CORRECTIVO'])),
+            pendientes=Count('id', filter=Q(status='PENDIENTE')),
             en_proceso=Count('id', filter=Q(status='EN_PROCESO')),
             terminadas=Count('id', filter=Q(status='TERMINADO'))
         )
@@ -2423,27 +2398,28 @@ class AsignacionRevisionView(AdminRequiredMixin, CreateView):
         return context
 
     def form_valid(self, form):
-        # Lógica para guardar el formulario de creación
         messages.success(self.request, "¡Asignación creada exitosamente!")
         return super().form_valid(form)
 
     def form_invalid(self, form):
         messages.error(self.request, "Error al crear la asignación. Revisa los campos.")
-        # Re-renderiza la página con los datos y el formulario inválido
         return self.render_to_response(self.get_context_data(form=form))
     
 @login_required
 @require_POST
 def update_asignacion_correctivo(request, pk):
     """
-    Recibe el POST del modal de M. Correctivo para guardar
+    Recibe el POST del modal de Tareas para guardar
     el FORMSET de TareasCorrectivas.
     """
     if not es_admin(request.user):
         messages.error(request, "No tiene permiso para esta acción.")
         return redirect('asignar-revision') 
 
-    asignacion = get_object_or_404(AsignacionRevision, pk=pk, tipo_programacion='CORRECTIVO')
+    # --- CORRECCIÓN AQUÍ ---
+    # Eliminamos el parámetro tipo_programacion='CORRECTIVO'.
+    # Ahora buscamos la asignación solo por su ID (pk), permitiendo editar cualquiera.
+    asignacion = get_object_or_404(AsignacionRevision, pk=pk)
     
     # 1. Definimos el FormSet igual que en la vista GET
     TareaCorrectivaFormSet = inlineformset_factory(
@@ -2452,7 +2428,7 @@ def update_asignacion_correctivo(request, pk):
         form=TareaCorrectivaForm, 
         extra=1, 
         can_delete=True, 
-        fk_name='asignacion'
+        fields=['refaccion', 'tipo_mantenimiento', 'usuario_asignado', 'fecha_limite', 'status'] # Aseguramos que los campos coincidan
     )
     
     # 2. Instanciamos el FormSet con los datos del POST
@@ -2464,7 +2440,7 @@ def update_asignacion_correctivo(request, pk):
 
     if formset.is_valid():
         formset.save()
-        messages.success(request, f"Tareas correctivas para {asignacion.unidad.nombre} guardadas.")
+        messages.success(request, f"Tareas para {asignacion.unidad.nombre} guardadas exitosamente.")
     else:
         # 3. Manejo de errores
         error_list = []

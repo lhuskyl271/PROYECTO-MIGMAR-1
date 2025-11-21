@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Costos Globales{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card shadow border-primary h-100">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h5 class="mb-0">Configuración Vigente</h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if parametros.first %}
+                        <h6 class="text-muted text-uppercase mt-3">Precio Diésel</h6>
+                        <h2 class="fw-bold text-dark display-4">${{ parametros.first.precio_diesel }}</h2>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="row">
+                            <div class="col-6 border-end">
+                                <small class="text-muted">Llantas / KM</small>
+                                <div class="fs-5 fw-bold">${{ parametros.first.costo_km_llantas }}</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Mtto / KM</small>
+                                <div class="fs-5 fw-bold">${{ parametros.first.costo_km_mantenimiento }}</div>
+                            </div>
+                        </div>
+                        
+                        <p class="text-muted mt-4 small">Actualizado: {{ parametros.first.fecha_actualizacion|date:"d M Y H:i" }}</p>
+                    {% else %}
+                        <p class="text-danger py-5">No hay costos configurados.</p>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-white border-0 pb-4 px-4">
+                    <a href="{% url 'parametros_nuevo' %}" class="btn btn-warning w-100 fw-bold shadow-sm">
+                        <i class="fas fa-sync-alt me-2"></i>Actualizar Costos
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 text-muted"><i class="fas fa-history me-2"></i>Historial de Cambios</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fecha Cambio</th>
+                                    <th>Diésel</th>
+                                    <th>Llantas/KM</th>
+                                    <th>Mtto/KM</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for param in parametros %}
+                                <tr {% if forloop.first %}class="table-success fw-bold"{% endif %}>
+                                    <td>{{ param.fecha_actualizacion|date:"d/m/Y H:i" }}</td>
+                                    <td>${{ param.precio_diesel }}</td>
+                                    <td>${{ param.costo_km_llantas }}</td>
+                                    <td>${{ param.costo_km_mantenimiento }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center">Sin historial.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

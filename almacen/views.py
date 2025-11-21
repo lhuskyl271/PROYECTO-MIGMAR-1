@@ -199,13 +199,37 @@ class EntradaArticuloUpdateView(LoginRequiredMixin, UpdateView):
 
 class EntradaArticuloDeleteView(LoginRequiredMixin, DeleteView):
     """
-    Permite ELIMINAR una entrada de compra (un registro de historial).
+    Permite ELIMINAR una entrada de compra.
+    SOLUCIÓN: Valida que borrar la entrada no deje el stock en negativo.
     """
     model = EntradaArticulo
     template_name = 'almacen/entradaarticulo_confirm_delete.html' 
-    context_object_name = 'entrada' # Para usar {{ entrada }} en la plantilla
+    context_object_name = 'entrada'
+
+    def form_valid(self, form):
+        # Obtenemos la entrada que se quiere borrar y su artículo
+        entrada = self.get_object()
+        articulo = entrada.articulo
+        
+        # Verificamos solo si la entrada afectó al stock (tipo 'Stock')
+        if entrada.tipo == 'Stock':
+            stock_resultante = articulo.stock_total - entrada.cantidad
+            
+            if stock_resultante < 0:
+                # Si el resultado es negativo, CANCELAMOS el borrado
+                messages.error(
+                    self.request, 
+                    f"Error: No puedes eliminar esta compra de {entrada.cantidad} unidades porque ya se han utilizado. "
+                    f"El stock quedaría en negativo ({stock_resultante}). "
+                    "Debes eliminar primero las salidas asociadas."
+                )
+                # Redirigimos de vuelta al detalle del artículo
+                return redirect('almacen:articulo-detalle', pk=articulo.pk)
+
+        # Si pasa la validación (o no era de tipo Stock), procedemos con el borrado estándar
+        response = super().form_valid(form)
+        return response
 
     def get_success_url(self):
-        # Redirige de vuelta a la página de detalle del artículo
-        messages.warning(self.request, "La entrada de compra ha sido eliminada.")
+        messages.warning(self.request, "La entrada de compra ha sido eliminada y el stock recalculado.")
         return reverse_lazy('almacen:articulo-detalle', kwargs={'pk': self.object.articulo.pk})

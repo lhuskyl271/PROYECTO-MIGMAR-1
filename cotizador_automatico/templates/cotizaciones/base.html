@@ -1,0 +1,30 @@
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle {% if 'cotizador_automatico/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+        <i class="fas fa-file-invoice-dollar"></i> Comercial
+    </a>
+    <ul class="dropdown-menu">
+        <li><h6 class="dropdown-header">Operación</h6></li>
+        <li>
+            <a class="dropdown-item" href="{% url 'cotizaciones_lista' %}">
+                <i class="fas fa-list-ul me-2"></i>Historial Cotizaciones
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{% url 'cotizacion_nueva' %}">
+                <i class="fas fa-calculator me-2"></i>Nueva Cotización
+            </a>
+        </li>
+        <li><hr class="dropdown-divider"></li>
+        <li><h6 class="dropdown-header">Configuración</h6></li>
+        <li>
+            <a class="dropdown-item" href="{% url 'unidades_lista' %}">
+                <i class="fas fa-truck me-2"></i>Catálogo Unidades
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="{% url 'parametros_lista' %}">
+                <i class="fas fa-gas-pump me-2"></i>Costos Base (Diésel)
+            </a>
+        </li>
+    </ul>
+</li>

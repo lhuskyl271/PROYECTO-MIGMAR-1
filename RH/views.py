@@ -179,10 +179,10 @@ def inicio_rh(request):
 
     alertas_rh.sort(key=lambda x: (x['tipo'] != 'danger', x['fecha']))
 
-    # Gráficos: Usamos 'departamento' directamente (texto)
-    departamento_distribucion = Empleado.objects.filter(activo=True).values('departamento').annotate(count=Count('id')).order_by('-count')
+    # Gráficos
+    departamento_distribucion = Empleado.objects.filter(activo=True).values('departamento__nombre').annotate(count=Count('id')).order_by('-count')
     departamento_distribucion_list = [
-        {'nombre': item['departamento'] or 'Sin Asignar', 'count': item['count']} 
+        {'nombre': item['departamento__nombre'] or 'Sin Asignar', 'count': item['count']} 
         for item in departamento_distribucion
     ]
 
@@ -223,7 +223,7 @@ class EmpleadoListView(LoginRequiredMixin, ListView):
         if nombre:
             queryset = queryset.filter(Q(nombre__icontains=nombre) | Q(apellido__icontains=nombre))
         if depto_id:
-             queryset = queryset.filter(departamento__icontains=depto_id)
+             queryset = queryset.filter(departamento__nombre__icontains=depto_id)
         if puesto_id:
              queryset = queryset.filter(puesto__icontains=puesto_id)
         if estado in ['0', '1']:
@@ -247,14 +247,11 @@ class EmpleadoListView(LoginRequiredMixin, ListView):
         valid_sort_fields = ['id', 'apellido', 'puesto', 'departamento', 'fecha_contratacion', 'empresa']
         clean_sort = sort_by.replace('-', '')
         if clean_sort == 'nombre': sort_by = sort_by.replace('nombre', 'apellido')
-        if clean_sort == 'puesto__nombre': sort_by = sort_by.replace('puesto__nombre', 'puesto')
-        if clean_sort == 'departamento__nombre': sort_by = sort_by.replace('departamento__nombre', 'departamento')
         
-        if clean_sort in valid_sort_fields:
-            queryset = queryset.order_by(sort_by)
-        else:
-            queryset = queryset.order_by('-id')
+        # Ajuste para ordenar por campos de texto en relaciones si es necesario
+        if clean_sort == 'departamento': sort_by = sort_by.replace('departamento', 'departamento__nombre')
 
+        queryset = queryset.order_by(sort_by) if clean_sort in valid_sort_fields else queryset.order_by('-id')
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -356,23 +353,32 @@ class EmpleadoCreateView(LoginRequiredMixin, CreateView):
             try:
                 with transaction.atomic():
                     self.object = form.save(commit=False)
-                    if not self.object.id:
-                        self.object.id = uuid.uuid4()
                     
-                    carpeta_uuid = str(self.object.id)
+                    # 1. GUARDAR PRIMERO para que la BD asigne el ID (1, 2, 3...)
+                    self.object.save()
+                    
+                    # 2. Ahora ya tenemos ID numérico
+                    carpeta_id = str(self.object.id)
                     campos_archivos = ['foto_perfil', 'ine_frente', 'ine_reverso', 'licencia']
                     
+                    guardar_nuevamente = False
                     for campo in campos_archivos:
                         if hasattr(self.object, campo):
                             archivo = self.request.FILES.get(campo)
                             if archivo:
                                 ext = os.path.splitext(archivo.name)[1]
-                                s3_path = f"rh/empleados/{carpeta_uuid}/{campo}{ext}"
+                                # Ruta: rh/empleados/1/foto_perfil.jpg
+                                s3_path = f"rh/empleados/{carpeta_id}/{campo}{ext}"
                                 ruta_final = _subir_archivo_a_s3(archivo, s3_path)
-                                if ruta_final: setattr(self.object, campo, ruta_final)
+                                if ruta_final: 
+                                    setattr(self.object, campo, ruta_final)
+                                    guardar_nuevamente = True
 
-                    self.object.save()
+                    if guardar_nuevamente:
+                        self.object.save()
+
                     form.save_m2m()
+                    
                     for fs in formsets.values():
                         fs.instance = self.object
                         fs.save()
@@ -388,14 +394,30 @@ class EmpleadoCreateView(LoginRequiredMixin, CreateView):
     def form_invalid(self, form):
         context = self.get_context_data(form=form)
         all_errors = []
+        
         if form.errors:
             for field, error_list in form.errors.items():
-                field_label = form.fields.get(field).label if form.fields.get(field) else field
-                all_errors.append(f"Error en '{field_label}': {error_list[0]}")
+                if field == '__all__':
+                    all_errors.append(f"Error general: {error_list[0]}")
+                else:
+                    field_obj = form.fields.get(field)
+                    field_label = field_obj.label if field_obj else field
+                    all_errors.append(f"Error en '{field_label}': {error_list[0]}")
         
-        for name, fs in formsets.items(): # Esto podría dar error si formsets no está definido aquí, ajustando:
-             # Recalculamos formsets para el contexto de error
-             pass
+        formsets = {
+            'Documentos de Operador': context['documentos_operador_formset'],
+            'Historial Laboral': context['historial_laboral_formset'],
+            'Salarios': context['salario_formset'],
+            'Contratos': context['contrato_formset'],
+            'Hijos': context['hijos_formset']
+        }
+
+        for name, fs in formsets.items():
+            if fs.errors:
+                hay_errores = any(e for e in fs.errors if e)
+                if hay_errores or fs.non_form_errors():
+                    all_errors.append(f"Hay errores en la sección '{name}'. Por favor verifica los datos ingresados.")
+
         context['all_errors'] = all_errors
         return self.render_to_response(context)
 
@@ -424,17 +446,10 @@ class EmpleadoUpdateView(LoginRequiredMixin, UpdateView):
         if self.object:
             employee = self.object
             historial = employee.historial_laboral_eventos.all()
-            tenure_days = (date.today() - employee.fecha_contratacion).days if employee.fecha_contratacion else 0
-            years_service = tenure_days / 365.25
-            vacation_days = 12 if 1 <= years_service < 2 else 14 if 2 <= years_service < 3 else 16 if 3 <= years_service < 4 else 18 if 4 <= years_service < 5 else 20 + ((int(years_service)-5)//5)*2 if years_service >= 5 else 0
             latest_salary = employee.salarios.order_by('-fecha_efectiva').first()
             data['dashboard_stats'] = {
-                'vacaciones_disponibles': vacation_days,
                 'sueldo_mensual': f"${latest_salary.sueldo_mensual:,.2f}" if latest_salary else "N/A",
                 'actas_administrativas': historial.filter(tipo_evento='ACTA_ADMINISTRATIVA').count(),
-                'suspensiones': historial.filter(tipo_evento='SUSPENSION').count(),
-                'recontrataciones': historial.filter(tipo_evento='RECONTRATACION').count(),
-                'permisos': historial.filter(tipo_evento='PERMISO').count()
             }
         return data
 
@@ -462,7 +477,7 @@ class EmpleadoUpdateView(LoginRequiredMixin, UpdateView):
                         self.object.motivo_inactivacion = None
                         self.object.fecha_inactivacion = None
 
-                    carpeta_uuid = str(self.object.id)
+                    carpeta_id = str(self.object.id)
                     campos_archivos = ['foto_perfil', 'ine_frente', 'ine_reverso', 'licencia']
                     
                     for campo in campos_archivos:
@@ -473,7 +488,7 @@ class EmpleadoUpdateView(LoginRequiredMixin, UpdateView):
                                 if archivo_viejo: _eliminar_archivo_de_s3(archivo_viejo.name)
                                 
                                 ext = os.path.splitext(nuevo_archivo.name)[1]
-                                s3_path = f"rh/empleados/{carpeta_uuid}/{campo}{ext}"
+                                s3_path = f"rh/empleados/{carpeta_id}/{campo}{ext}"
                                 ruta_final = _subir_archivo_a_s3(nuevo_archivo, s3_path)
                                 if ruta_final: setattr(self.object, campo, ruta_final)
 
@@ -533,7 +548,7 @@ class EmpleadoDeleteView(LoginRequiredMixin, DeleteView):
 
 
 # ==============================================================================
-# === IMPORTACIÓN MASIVA (RESTAURADA Y ADAPTADA) ===
+# === IMPORTACIÓN MASIVA ROBUSTA (Auto-Increment + Catálogos) ===
 # ==============================================================================
 
 class ImportarEmpleadosExcelView(RHAdminRequiredMixin, FormView):
@@ -541,7 +556,7 @@ class ImportarEmpleadosExcelView(RHAdminRequiredMixin, FormView):
     success_url = reverse_lazy('rh:lista_empleados')
     
     def get(self, request, *args, **kwargs):
-        return render(request, self.template_name, {'titulo': 'Migración Masiva (Excel)'})
+        return render(request, self.template_name, {'titulo': 'Migración Masiva Completa'})
 
     def post(self, request, *args, **kwargs):
         excel_file = request.FILES.get('excel_file')
@@ -550,112 +565,227 @@ class ImportarEmpleadosExcelView(RHAdminRequiredMixin, FormView):
             return redirect(request.path)
 
         try:
-            wb = openpyxl.load_workbook(excel_file)
+            wb = openpyxl.load_workbook(excel_file, data_only=True)
             ws = wb.active
             
             creados = 0
+            actualizados = 0
             errores = []
             
-            S3_PREFIX_FOTOS = 'rh/empleados/importados/fotos/'
-            S3_PREFIX_INE = 'rh/empleados/importados/ine/'
+            # --- 1. MAPEO DINÁMICO DE ENCABEZADOS ---
+            headers = {}
+            for cell in ws[1]: 
+                if cell.value:
+                    headers[str(cell.value).strip()] = cell.column - 1
+
+            def get_val(row_vals, col_name):
+                idx = headers.get(col_name)
+                if idx is not None and idx < len(row_vals):
+                    val = row_vals[idx]
+                    if val is None: return None
+                    return str(val).strip()
+                return None
+
+            def parse_date(date_val):
+                if not date_val: return None
+                if hasattr(date_val, 'date'): return date_val.date()
+                try:
+                    clean_str = str(date_val).split(' ')[0]
+                    return timezone.datetime.strptime(clean_str, '%Y-%m-%d').date()
+                except:
+                    return None
 
             with transaction.atomic():
                 for index, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
                     try:
-                        # Mapeo de columnas (Ajustado a tu plantilla anterior)
-                        (num_emp, nombre, apellido, email, fecha_ingreso, nombre_puesto, 
-                         nombre_depto, sueldo_diario, tipo_contrato, fecha_nacimiento, 
-                         curp, rfc, nss, telefono, foto_name, ine_name) = row[:16]
-                        
-                        if not nombre or not apellido: continue
+                        nombre = get_val(row, 'Nombre')
+                        apellido = get_val(row, 'Apellido')
 
-                        if isinstance(fecha_ingreso, str):
-                            try: fecha_ingreso = timezone.datetime.strptime(fecha_ingreso, '%Y-%m-%d').date()
-                            except: fecha_ingreso = timezone.now().date()
-                        if not fecha_ingreso: fecha_ingreso = timezone.now().date()
-                            
-                        if isinstance(fecha_nacimiento, str):
-                            try: fecha_nacimiento = timezone.datetime.strptime(fecha_nacimiento, '%Y-%m-%d').date()
-                            except: pass
+                        if not nombre or not apellido:
+                            continue
 
-                        # ADAPTACIÓN CLAVE: Puesto y Depto ahora son Strings (No se crean objetos)
-                        # Simplemente asignamos el string que viene del Excel
+                        # --- BUSQUEDA PARA EVITAR DUPLICADOS (LOGICA AUTO-INCREMENT) ---
+                        curp = get_val(row, 'CURP')
+                        no_empleado = get_val(row, 'No. Empleado')
                         
-                        empleado = Empleado(
-                            numero_empleado=str(num_emp) if num_emp else None,
-                            nombre=nombre,
-                            apellido=apellido,
-                            email=email,
-                            fecha_contratacion=fecha_ingreso,
-                            puesto=str(nombre_puesto) if nombre_puesto else "",
-                            departamento=str(nombre_depto) if nombre_depto else "",
-                            fecha_nacimiento=fecha_nacimiento,
-                            curp=curp, rfc=rfc, nss=str(nss) if nss else None,
-                            telefono_personal=str(telefono) if telefono else None,
-                            activo=True
-                        )
+                        empleado = None
+                        
+                        # Prioridad 1: CURP
+                        if curp:
+                            empleado = Empleado.objects.filter(curp=curp).first()
+                        # Prioridad 2: No. Empleado
+                        if not empleado and no_empleado:
+                            empleado = Empleado.objects.filter(numero_empleado=no_empleado).first()
+                        
+                        es_nuevo = False
+                        if not empleado:
+                            empleado = Empleado()
+                            es_nuevo = True
+                        
+                        # --- CATÁLOGOS AUTOMÁTICOS ---
+                        # Departamento
+                        depto_str = get_val(row, 'Departamento')
+                        if depto_str:
+                            depto_obj, _ = Departamento.objects.get_or_create(
+                                nombre__iexact=depto_str,
+                                defaults={'nombre': depto_str, 'descripcion': 'Auto-generado por importación'}
+                            )
+                            empleado.departamento = depto_obj
 
-                        # Vincular rutas S3 si hay nombres de archivo
-                        if foto_name: empleado.foto_perfil.name = f"{S3_PREFIX_FOTOS}{foto_name}"
+                        # Puesto
+                        puesto_str = get_val(row, 'Puesto') or "No asignado"
+                        empleado.puesto = puesto_str
+                        if puesto_str:
+                            Puesto.objects.get_or_create(
+                                nombre__iexact=puesto_str,
+                                defaults={'nombre': puesto_str, 'descripcion': 'Auto-generado por importación'}
+                            )
+
+                        # Motivo Inactivación
+                        motivo_str = get_val(row, 'Motivo Inactivación')
+                        if motivo_str:
+                            motivo_obj, _ = MotivoInactivacion.objects.get_or_create(
+                                motivo__iexact=motivo_str,
+                                defaults={'motivo': motivo_str}
+                            )
+                            empleado.motivo_inactivacion = motivo_obj
+
+                        # --- ASIGNACIÓN DE CAMPOS ---
+                        empleado.numero_empleado = no_empleado
+                        empleado.nombre = nombre
+                        empleado.apellido = apellido
+                        empleado.fecha_contratacion = parse_date(get_val(row, 'Fecha Contratación')) or timezone.now().date()
+                        empleado.fecha_nacimiento = parse_date(get_val(row, 'Fecha Nacimiento'))
+                        empleado.email = get_val(row, 'Email')
+                        empleado.telefono_personal = get_val(row, 'Teléfono Personal')
                         
-                        # Guardar empleado
+                        # Domicilio
+                        empleado.direccion = get_val(row, 'Calle y Número')
+                        empleado.colonia = get_val(row, 'Colonia')
+                        empleado.codigo_postal = get_val(row, 'C.P.')
+                        empleado.ciudad = get_val(row, 'Ciudad')
+                        empleado.estado = get_val(row, 'Estado')
+                        empleado.pais = get_val(row, 'País') or 'México'
+                        
+                        # Legal
+                        empleado.curp = curp
+                        empleado.rfc = get_val(row, 'RFC')
+                        empleado.nss = get_val(row, 'NSS')
+                        empleado.estado_civil = get_val(row, 'Estado Civil')
+                        empleado.nacionalidad = get_val(row, 'Nacionalidad')
+                        
+                        # Familia
+                        empleado.nombre_conyuge = get_val(row, 'Nombre Cónyuge')
+                        empleado.telefono_conyuge = get_val(row, 'Teléfono Cónyuge')
+                        
+                        # Bancario
+                        empleado.banco = get_val(row, 'Banco')
+                        empleado.clabe_interbancaria = get_val(row, 'CLABE')
+                        empleado.numero_cuenta = get_val(row, 'No. Cuenta')
+                        empleado.numero_tarjeta = get_val(row, 'No. Tarjeta')
+                        
+                        # Referencias
+                        empleado.nombre_referencia_1 = get_val(row, 'Ref. 1 Nombre')
+                        empleado.telefono_referencia_1 = get_val(row, 'Ref. 1 Tel')
+                        empleado.relacion_referencia_1 = get_val(row, 'Ref. 1 Relación')
+                        empleado.nombre_referencia_2 = get_val(row, 'Ref. 2 Nombre')
+                        empleado.telefono_referencia_2 = get_val(row, 'Ref. 2 Tel')
+                        empleado.relacion_referencia_2 = get_val(row, 'Ref. 2 Relación')
+
+                        # Estatus
+                        estatus_val = get_val(row, 'Estatus')
+                        empleado.activo = True if estatus_val and 'ACTIVO' in estatus_val.upper() else False
+                        
+                        if not empleado.activo:
+                            empleado.fecha_inactivacion = parse_date(get_val(row, 'Fecha Inactivación')) or timezone.now().date()
+                        else:
+                            empleado.fecha_inactivacion = None
+                            empleado.motivo_inactivacion = None
+
+                        empresa_raw = get_val(row, 'Empresa')
+                        if empresa_raw:
+                            if 'MARCO' in empresa_raw.upper(): empleado.empresa = 'MARCO_MORALES'
+                            elif 'MIGMAR' in empresa_raw.upper(): empleado.empresa = 'MIGMAR'
+                        
+                        # VINCULACIÓN DE ARCHIVOS (S3)
+                        S3_RUTA_FOTOS = "rh/importacion/fotos/"
+                        S3_RUTA_INE = "rh/importacion/ine/"
+                        foto_nombre = get_val(row, 'Nombre Archivo Foto') or get_val(row, 'Tiene Foto')
+                        if foto_nombre and ('.jpg' in foto_nombre or '.png' in foto_nombre):
+                             empleado.foto_perfil.name = f"{S3_RUTA_FOTOS}{foto_nombre}"
+
+                        # GUARDAR PARA OBTENER ID
                         empleado.save()
 
-                        # Crear Salario
+                        # --- M2M (REQUIEREN ID PREVIO) ---
+                        # Viajes
+                        viajes_str = get_val(row, 'Tipos de Viaje')
+                        empleado.tipo_viaje.clear()
+                        if viajes_str:
+                            for v in viajes_str.split(','):
+                                v_limpio = v.strip()
+                                if v_limpio:
+                                    obj, _ = TipoViaje.objects.get_or_create(nombre__iexact=v_limpio, defaults={'nombre': v_limpio})
+                                    empleado.tipo_viaje.add(obj)
+
+                        # Carga
+                        carga_str = get_val(row, 'Tipos de Carga')
+                        empleado.tipo_carga.clear()
+                        if carga_str:
+                            for c in carga_str.split(','):
+                                c_limpio = c.strip()
+                                if c_limpio:
+                                    obj, _ = TipoCarga.objects.get_or_create(nombre__iexact=c_limpio, defaults={'nombre': c_limpio})
+                                    empleado.tipo_carga.add(obj)
+
+                        # Divisiones
+                        div_str = get_val(row, 'Divisiones Operativas')
+                        empleado.division_operativa.clear()
+                        if div_str:
+                            for d in div_str.split(','):
+                                d_limpio = d.strip()
+                                if d_limpio:
+                                    obj, _ = DivisionOperativa.objects.get_or_create(nombre__iexact=d_limpio, defaults={'nombre': d_limpio})
+                                    empleado.division_operativa.add(obj)
+
+                        # Salario
+                        sueldo_diario = get_val(row, 'Sueldo Diario Actual')
                         if sueldo_diario:
-                            Salario.objects.create(
-                                empleado=empleado,
-                                sueldo_diario=float(sueldo_diario),
-                                fecha_efectiva=fecha_ingreso,
-                                observaciones="Carga Inicial Excel"
-                            )
+                            try:
+                                val_sueldo = float(sueldo_diario)
+                                if val_sueldo > 0:
+                                    ultimo = empleado.salarios.order_by('-fecha_efectiva').first()
+                                    if not ultimo or abs(float(ultimo.sueldo_diario) - val_sueldo) > 0.1:
+                                        Salario.objects.create(
+                                            empleado=empleado,
+                                            sueldo_diario=val_sueldo,
+                                            fecha_efectiva=empleado.fecha_contratacion or timezone.now().date(),
+                                            observaciones="Importación Masiva"
+                                        )
+                            except: pass
 
-                        # Crear Contrato
-                        if tipo_contrato:
-                            Contrato.objects.create(
-                                empleado=empleado,
-                                tipo_contrato=tipo_contrato,
-                                fecha_inicio=fecha_ingreso,
-                                comentarios="Carga Inicial Excel"
-                            )
-
-                        creados += 1
+                        if es_nuevo: creados += 1
+                        else: actualizados += 1
                         
                     except Exception as e:
-                        errores.append(f"Fila {index}: {str(e)}")
+                        errores.append(f"Fila {index} ({get_val(row, 'Nombre')}): {str(e)}")
             
-            if creados > 0: messages.success(request, f"Se migraron {creados} empleados.")
-            if errores: messages.warning(request, f"Errores en {len(errores)} filas: {', '.join(errores[:3])}")
+            if creados > 0 or actualizados > 0: 
+                messages.success(request, f"Éxito: {creados} nuevos empleados, {actualizados} actualizados.")
+            if errores: 
+                messages.warning(request, f"Hubo errores en {len(errores)} filas. Verifique los datos.")
+                print(errores)
                 
             return redirect(self.success_url)
 
         except Exception as e:
-            messages.error(request, f"Error en archivo: {e}")
+            messages.error(request, f"Error crítico leyendo el archivo: {e}")
             return redirect(request.path)
-
-def descargar_plantilla_importacion(request):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Plantilla Empleados"
-    # Headers deben coincidir con el orden esperado en ImportarEmpleadosExcelView
-    headers = [
-        "Numero Empleado", "Nombre", "Apellido", "Email", 
-        "Fecha Ingreso (AAAA-MM-DD)", "Puesto", "Departamento", 
-        "Sueldo Diario", "Tipo Contrato", 
-        "Fecha Nacimiento", "CURP", "RFC", "NSS", "Telefono",
-        "Nombre Archivo Foto", "Nombre Archivo INE"
-    ]
-    ws.append(headers)
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="plantilla_empleados.xlsx"'
-    wb.save(response)
-    return response
 
 # ==============================================================================
 # === OTRAS VISTAS CRUD ===
 # ==============================================================================
 
-# Departamentos (Mantenemos CRUDs por si se usan en el futuro o para selectores)
 class DepartamentoListView(LoginRequiredMixin, ListView):
     model = Departamento
     template_name = 'rh/lista_departamentos.html'
@@ -769,7 +899,7 @@ class TipoDocumentoOperadorDeleteView(LoginRequiredMixin, DeleteView):
 def generar_pdf_empleado(request, pk):
     empleado = get_object_or_404(
         Empleado.objects.select_related(
-             'supervisor', 'motivo_inactivacion'
+             'supervisor', 'motivo_inactivacion', 'departamento'
         ).prefetch_related(
             'hijos', 'contratos', 'documentos_operador__tipo_documento',
             'salarios', 'historial_laboral_eventos', 'tipo_viaje',
@@ -824,57 +954,125 @@ def semaforo_documentos_view(request):
     return render(request, 'rh/semaforo_documentos.html', context)
 
 def export_empleados_excel(request):
-    empleados = Empleado.objects.all().select_related('motivo_inactivacion').prefetch_related('division_operativa', 'tipo_carga', 'tipo_viaje')
+    empleados = Empleado.objects.all().select_related(
+        'motivo_inactivacion', 
+        'supervisor', 
+        'departamento'
+    ).prefetch_related(
+        'division_operativa', 
+        'tipo_carga', 
+        'tipo_viaje',
+        'salarios',
+        'hijos'
+    ).order_by('id')
+
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
-    worksheet.title = 'Empleados'
+    worksheet.title = 'Reporte Maestro Empleados'
 
     headers = [
-        'ID', 'Número Empleado', 'Nombre', 'Apellido', 'Puesto', 'Departamento',
-        'Email', 'Fecha Contratación', 'Activo', 'Motivo Inactivación', 'Fecha Inactivación',
-        'Fecha Nacimiento', 'Dirección', 'Teléfono Personal', 'Estado Civil', 'Nacionalidad',
-        'CURP', 'RFC', 'NSS', 'Empresa', 'Tipo de Viaje', 'Tipo de Carga', 'Divisiones Operativas',
-        'Banco', 'CLABE Interbancaria', 'Número de Cuenta',
-        'Nombre Referencia 1', 'Teléfono Referencia 1', 'Relación Referencia 1',
-        'Nombre Referencia 2', 'Teléfono Referencia 2', 'Relación Referencia 2'
+        'ID', 'No. Empleado', 'Nombre', 'Apellido', 'Estatus', 
+        'Puesto', 'Departamento', 'Empresa', 'Supervisor',
+        'Fecha Contratación', 'Antigüedad (Años)', 'Fecha Inactivación', 'Motivo Inactivación',
+        'Fecha Nacimiento', 'Edad', 'Email', 'Teléfono Personal', 
+        'Estado Civil', 'Nacionalidad', 'CURP', 'RFC', 'NSS',
+        'Calle y Número', 'Colonia', 'C.P.', 'Ciudad', 'Estado', 'País',
+        'Nombre Cónyuge', 'Teléfono Cónyuge', 'Hijos (Resumen)',
+        'Tipos de Viaje', 'Tipos de Carga', 'Divisiones Operativas',
+        'Banco', 'CLABE', 'No. Cuenta', 'No. Tarjeta',
+        'Sueldo Diario Actual', 'Sueldo Mensual Estimado',
+        'Ref. 1 Nombre', 'Ref. 1 Tel', 'Ref. 1 Relación',
+        'Ref. 2 Nombre', 'Ref. 2 Tel', 'Ref. 2 Relación',
+        'Tiene Foto', 'Tiene INE', 'Tiene Comp. Dom.', 'Tiene CV',
+        'Tiene Acta Nac.', 'Tiene Comp. Estudios', 'Tiene Const. Fiscal',
+        'Tiene IMSS', 'Tiene Infonavit', 'Cartas Rec.'
     ]
     worksheet.append(headers)
 
-    for empleado in empleados:
-        fecha_contratacion = empleado.fecha_contratacion.strftime('%Y-%m-%d') if empleado.fecha_contratacion else ''
-        fecha_inactivacion = empleado.fecha_inactivacion.strftime('%Y-%m-%d') if empleado.fecha_inactivacion else ''
-        fecha_nacimiento = empleado.fecha_nacimiento.strftime('%Y-%m-%d') if empleado.fecha_nacimiento else ''
-        divisiones = ", ".join([div.nombre for div in empleado.division_operativa.all()])
-        tipos_viaje_str = ", ".join([tv.nombre for tv in empleado.tipo_viaje.all()])
-        tipos_carga_str = ", ".join([tc.nombre for tc in empleado.tipo_carga.all()])
+    for emp in empleados:
+        f_contrato = emp.fecha_contratacion.strftime('%Y-%m-%d') if emp.fecha_contratacion else ''
+        f_baja = emp.fecha_inactivacion.strftime('%Y-%m-%d') if emp.fecha_inactivacion else ''
+        f_nac = emp.fecha_nacimiento.strftime('%Y-%m-%d') if emp.fecha_nacimiento else ''
         
-        # Acceso directo a atributos de texto
+        divisiones = ", ".join([div.nombre for div in emp.division_operativa.all()])
+        viajes = ", ".join([tv.nombre for tv in emp.tipo_viaje.all()])
+        cargas = ", ".join([tc.nombre for tc in emp.tipo_carga.all()])
+        
+        ultimo_salario = emp.salarios.order_by('-fecha_efectiva').first()
+        sueldo_diario = ultimo_salario.sueldo_diario if ultimo_salario else 0
+        sueldo_mensual = ultimo_salario.sueldo_mensual if ultimo_salario else 0
+
+        hijos_list = [f"{h.nombre} ({h.edad} años)" for h in emp.hijos.all()]
+        hijos_str = "; ".join(hijos_list)
+
+        def check_doc(doc_field):
+            return "SÍ" if doc_field else "NO"
+
+        cartas_count = 0
+        if emp.carta_recomendacion_1_documento: cartas_count += 1
+        if emp.carta_recomendacion_2_documento: cartas_count += 1
+
         row_data = [
-            empleado.id, empleado.numero_empleado, empleado.nombre, empleado.apellido,
-            empleado.puesto or 'N/A', 
-            empleado.departamento or 'N/A', 
-            empleado.email, fecha_contratacion, 'Sí' if empleado.activo else 'No',
-            empleado.motivo_inactivacion.motivo if empleado.motivo_inactivacion else '',
-            fecha_inactivacion, fecha_nacimiento, empleado.direccion, empleado.telefono_personal,
-            empleado.get_estado_civil_display() if empleado.estado_civil else '',
-            empleado.nacionalidad, empleado.curp, empleado.rfc, empleado.nss,
-            empleado.get_empresa_display() if empleado.empresa else '',
-            tipos_viaje_str, tipos_carga_str, divisiones,
-            empleado.banco, empleado.clabe_interbancaria, empleado.numero_cuenta,
-            empleado.nombre_referencia_1, empleado.telefono_referencia_1, empleado.relacion_referencia_1,
-            empleado.nombre_referencia_2, empleado.telefono_referencia_2, empleado.relacion_referencia_2,
+            emp.id, 
+            emp.numero_empleado, 
+            emp.nombre, 
+            emp.apellido, 
+            'ACTIVO' if emp.activo else 'BAJA',
+            emp.puesto, 
+            emp.departamento.nombre if emp.departamento else '', 
+            emp.get_empresa_display() if emp.empresa else '',
+            str(emp.supervisor) if emp.supervisor else '',
+            f_contrato,
+            emp.antiguedad,
+            f_baja,
+            str(emp.motivo_inactivacion) if emp.motivo_inactivacion else '',
+            f_nac,
+            emp.edad,
+            emp.email,
+            emp.telefono_personal,
+            emp.estado_civil,
+            emp.nacionalidad,
+            emp.curp,
+            emp.rfc,
+            emp.nss,
+            emp.direccion,
+            emp.colonia,
+            emp.codigo_postal,
+            emp.ciudad,
+            emp.estado,
+            emp.pais,
+            emp.nombre_conyuge,
+            emp.telefono_conyuge,
+            hijos_str,
+            viajes,
+            cargas,
+            divisiones,
+            emp.banco,
+            emp.clabe_interbancaria,
+            emp.numero_cuenta,
+            emp.numero_tarjeta,
+            sueldo_diario,
+            sueldo_mensual,
+            emp.nombre_referencia_1, emp.telefono_referencia_1, emp.relacion_referencia_1,
+            emp.nombre_referencia_2, emp.telefono_referencia_2, emp.relacion_referencia_2,
+            check_doc(emp.foto_perfil),
+            check_doc(emp.ine_documento),
+            check_doc(emp.comprobante_domicilio),
+            check_doc(emp.curriculum_vitae),
+            check_doc(emp.acta_nacimiento_documento),
+            check_doc(emp.comprobante_estudios_documento),
+            check_doc(emp.constancia_fiscal_documento),
+            check_doc(emp.semanas_cotizadas_imss_documento),
+            check_doc(emp.aviso_retencion_infonavit_documento),
+            f"{cartas_count} entregadas"
         ]
         worksheet.append(row_data)
 
     full_range = f"A1:{get_column_letter(worksheet.max_column)}{worksheet.max_row}"
-    tabla = Table(displayName="TablaEmpleados", ref=full_range)
-    style = TableStyleInfo(name="TableStyleMedium9", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+    tabla = Table(displayName="TablaMaestraEmpleados", ref=full_range)
+    style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
     tabla.tableStyleInfo = style
     worksheet.add_table(tabla)
-
-    center_alignment = Alignment(horizontal='center', vertical='center')
-    for row in worksheet.iter_rows():
-        for cell in row: cell.alignment = center_alignment
 
     for col in worksheet.columns:
         max_length = 0
@@ -885,10 +1083,12 @@ def export_empleados_excel(request):
                     cell_length = len(str(cell.value))
                     if cell_length > max_length: max_length = cell_length
             except: pass
-        worksheet.column_dimensions[column].width = (max_length + 4)
+        adjusted_width = (max_length + 2)
+        if adjusted_width > 50: adjusted_width = 50
+        worksheet.column_dimensions[column].width = adjusted_width
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="reporte_total_empleados.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="Reporte_Total_Empleados_{date.today()}.xlsx"'
     workbook.save(response)
     return response
 
@@ -937,32 +1137,6 @@ def reporte_bajas(request):
                         if cell_length > max_length: max_length = cell_length
                 except: pass
             ws_data.column_dimensions[column_letter].width = (max_length + 2)
-
-        if not df.empty:
-            ws_charts = wb.create_sheet("Graficas")
-            df_charts = df.copy()
-            df_charts['Fecha del Evento'] = pd.to_datetime(df_charts['Fecha del Evento'])
-            monthly_counts = df_charts.groupby(df_charts['Fecha del Evento'].dt.strftime('%Y-%m')).size().reset_index(name='Total').sort_values(by='Fecha del Evento')
-            weekly_counts = df_charts.groupby(df_charts['Fecha del Evento'].dt.strftime('%Y-W%U')).size().reset_index(name='Total').sort_values(by='Fecha del Evento')
-            
-            ws_charts.append(['Mes', 'Total Bajas'])
-            for _, row in monthly_counts.iterrows(): ws_charts.append(list(row))
-            ws_charts.append([])
-            start_row_weekly_data = ws_charts.max_row + 1
-            ws_charts.append(['Semana', 'Total Bajas'])
-            for _, row in weekly_counts.iterrows(): ws_charts.append(list(row))
-
-            chart_monthly = BarChart()
-            chart_monthly.title = "Bajas por Mes"
-            chart_monthly.add_data(Reference(ws_charts, min_col=2, min_row=1, max_row=len(monthly_counts)+1, max_col=2), titles_from_data=True)
-            chart_monthly.set_categories(Reference(ws_charts, min_col=1, min_row=2, max_row=len(monthly_counts)+1))
-            ws_charts.add_chart(chart_monthly, "D2")
-
-            chart_weekly = BarChart()
-            chart_weekly.title = "Bajas por Semana"
-            chart_weekly.add_data(Reference(ws_charts, min_col=2, min_row=start_row_weekly_data, max_row=ws_charts.max_row, max_col=2), titles_from_data=True)
-            chart_weekly.set_categories(Reference(ws_charts, min_col=1, min_row=start_row_weekly_data + 1, max_row=ws_charts.max_row))
-            ws_charts.add_chart(chart_weekly, "D20")
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="reporte_bajas_personal.xlsx"'
@@ -1028,10 +1202,12 @@ def vacantes_dashboard_view(request):
         if vacante.estatus == 'BUSCANDO':
             vacante.dias_transcurridos = (today - vacante.fecha_inicio).days
             if vacante.empleado and vacante.empleado.puesto and vacante.empleado.departamento:
+                # Como departamento ahora es FK, usamos departamento__nombre__icontains
+                depto_nombre = vacante.empleado.departamento.nombre if vacante.empleado.departamento else ""
                 vacante.potenciales_reemplazos = Empleado.objects.filter(
                     activo=True, 
                     puesto__icontains=str(vacante.empleado.puesto), 
-                    departamento__icontains=str(vacante.empleado.departamento)
+                    departamento__nombre__icontains=depto_nombre
                 ).exclude(id=vacante.empleado.id)
             else: vacante.potenciales_reemplazos = Empleado.objects.none()
         else:
@@ -1045,14 +1221,14 @@ def vacantes_dashboard_view(request):
         }
         avg_days_data = HistorialLaboral.objects.filter(
             empleado__empresa=empresa, estatus='REMPLAZADO', fecha_reemplazo__isnull=False
-        ).values('empleado__departamento').annotate(
+        ).values('empleado__departamento__nombre').annotate(
             avg_days=Avg(F('fecha_reemplazo') - F('fecha_inicio'))
-        ).values('empleado__departamento', 'avg_days')
+        ).values('empleado__departamento__nombre', 'avg_days')
         
         bar_chart_data[empresa] = {
             'departamento': [
-                {'name': item['empleado__departamento'], 'avg_days': item['avg_days'].days if item['avg_days'] else 0} 
-                for item in avg_days_data if item['empleado__departamento']
+                {'name': item['empleado__departamento__nombre'], 'avg_days': item['avg_days'].days if item['avg_days'] else 0} 
+                for item in avg_days_data if item['empleado__departamento__nombre']
             ]
         }
 
@@ -1091,3 +1267,53 @@ def reporte_documentacion_operador(request):
 
     context = {'operadores_incompletos': operadores_incompletos}
     return render(request, 'rh/reporte_documentacion_operador.html', context)
+
+def descargar_plantilla_importacion(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Plantilla Carga Masiva"
+    
+    headers = [
+        'No. Empleado', 'Nombre', 'Apellido', 'Email', 
+        'Fecha Contratación', 'Puesto', 'Departamento', 'Empresa',
+        'Estatus', 'Fecha Inactivación', 'Motivo Inactivación',
+        'Fecha Nacimiento', 'CURP', 'RFC', 'NSS',
+        'Calle y Número', 'Colonia', 'C.P.', 'Ciudad', 'Estado', 'País',
+        'Teléfono Personal', 'Estado Civil', 'Nacionalidad',
+        'Nombre Cónyuge', 'Teléfono Cónyuge',
+        'Banco', 'CLABE', 'No. Cuenta', 'No. Tarjeta',
+        'Sueldo Diario Actual',
+        'Tipos de Viaje', 'Tipos de Carga', 'Divisiones Operativas'
+    ]
+    
+    ws.append(headers)
+    
+    # Ejemplo de llenado
+    ws.append([
+        '001', 'Ejemplo', 'Perez', 'ejemplo@migmar.com',
+        '2024-01-01', 'Operador', 'Operaciones', 'MIGMAR',
+        'ACTIVO', '', '',
+        '1990-05-20', 'CURP123456...', 'RFC123...', 'NSS123...',
+        'Av. Universidad 100', 'Centro', '66400', 'San Nicolas', 'NL', 'México',
+        '8112345678', 'Casado/a', 'Mexicana',
+        'Maria Lopez', '8187654321',
+        'BBVA', '012345678901234567', '1234567890', '1234567812345678',
+        '350.50',
+        'Local, Foraneo', 'Seco, Refrigerado', 'Walmart, Autozone'
+    ])
+
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except: pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column].width = adjusted_width
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="plantilla_importacion_migmar.xlsx"'
+    wb.save(response)
+    return response

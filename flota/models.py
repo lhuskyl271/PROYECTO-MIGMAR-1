@@ -428,22 +428,17 @@ class AjusteInventario(models.Model):
         ordering = ['-fecha']
         
 class AsignacionRevision(models.Model):
-    """
-    Modela la asignación de una unidad para revisión en una fecha específica.
-    """
-    
+    # --- CAMBIO 1: Nuevas opciones de programación ---
     TIPO_PROGRAMACION_CHOICES = [
         ('PROGRAMACION', 'Programación Normal'),
-        ('PREVENTIVO', 'Mantenimiento Preventivo'),
-        ('CORRECTIVO', 'Mantenimiento Correctivo'),
+        ('FUERA_PROGRAMACION', 'Fuera de Programación'),
     ]
     tipo_programacion = models.CharField(
-        max_length=12, 
+        max_length=20, # Aumentamos longitud por si acaso
         choices=TIPO_PROGRAMACION_CHOICES, 
         default='PROGRAMACION',
         verbose_name="Tipo de Programación"
     )
-
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE, verbose_name="Unidad Asignada")
     fecha_revision = models.DateField(verbose_name="Fecha de Revisión")
     
@@ -644,7 +639,20 @@ class TareaCorrectiva(models.Model):
         ('PENDIENTE', 'Pendiente'),
         ('COMPLETADA', 'Completada'),
     ]
-
+    
+    # --- CAMBIO 2: Nuevo campo para definir tipo por tarea ---
+    TIPO_MANTENIMIENTO_CHOICES = [
+        ('CORRECTIVO', 'Correctivo'),
+        ('PREVENTIVO', 'Preventivo'),
+    ]
+    
+    tipo_mantenimiento = models.CharField(
+        max_length=12,
+        choices=TIPO_MANTENIMIENTO_CHOICES,
+        default='CORRECTIVO',
+        verbose_name="Tipo de Mantenimiento"
+    )
+    
     # Relación "Muchos a Uno" con la asignación
     asignacion = models.ForeignKey(
         AsignacionRevision, 

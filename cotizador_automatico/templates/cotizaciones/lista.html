@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Historial de Cotizaciones - MIGMAR{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-dark border-start border-5 border-primary ps-3">
+            <i class="fas fa-file-invoice-dollar text-secondary me-2"></i>Historial de Cotizaciones
+        </h2>
+        <a href="{% url 'cotizacion_nueva' %}" class="btn btn-primary btn-lg shadow-sm">
+            <i class="fas fa-plus-circle me-2"></i>Nueva Cotización
+        </a>
+    </div>
+
+    <div class="card shadow border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-dark text-white">
+                        <tr>
+                            <th class="py-3 ps-4">Folio</th>
+                            <th class="py-3">Cliente</th>
+                            <th class="py-3">Ruta (Origen <i class="fas fa-arrow-right mx-1 text-warning"></i> Destino)</th>
+                            <th class="py-3">Unidad / Tipo</th>
+                            <th class="py-3">Fecha</th>
+                            <th class="py-3 text-center">Estatus</th>
+                            <th class="py-3 text-end pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cot in cotizaciones %}
+                        <tr>
+                            <td class="ps-4 fw-bold text-primary">#{{ cot.id|stringformat:"04d" }}</td>
+                            <td>
+                                <div class="fw-bold">{{ cot.cliente.nombre }}</div>
+                                {% if cot.cliente.contacto %}
+                                <small class="text-muted"><i class="fas fa-user-tag me-1"></i>{{ cot.cliente.contacto }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span><i class="fas fa-map-marker-alt text-danger me-1"></i> {{ cot.origen }}</span>
+                                    <span><i class="fas fa-flag-checkered text-success me-1"></i> {{ cot.destino }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="fas fa-truck me-1"></i> {{ cot.unidad.nombre }}
+                                </span>
+                            </td>
+                            <td>{{ cot.fecha|date:"d M Y" }}</td>
+                            <td class="text-center">
+                                {% if cot.estatus == 'BORRADOR' %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3">Borrador</span>
+                                {% elif cot.estatus == 'APROBADA' %}
+                                    <span class="badge bg-success rounded-pill px-3">Aprobada</span>
+                                {% else %}
+                                    <span class="badge bg-danger rounded-pill px-3">Rechazada</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <a href="{% url 'cotizacion_detalle' cot.id %}" class="btn btn-outline-primary btn-sm" title="Ver Detalles">
+                                    <i class="fas fa-eye me-1"></i> Ver / Imprimir
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-folder-open fa-3x mb-3"></i>
+                                    <h5>No hay cotizaciones registradas</h5>
+                                    <p>Crea la primera para comenzar a gestionar tus fletes.</p>
+                                    <a href="{% url 'cotizacion_nueva' %}" class="btn btn-primary mt-2">Crear Cotización</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

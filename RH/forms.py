@@ -93,7 +93,8 @@ class EmpleadoForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # 1. ARREGLO DE DROPDOWNS (Puesto y Departamento)
+        # 1. ARREGLO DE DROPDOWNS (Puesto y Departamento) arreglo
+    
         # Como ahora son texto en la BD, cargamos las opciones manualmente para que el usuario vea una lista
         puestos_disponibles = Puesto.objects.all().order_by('nombre')
         choices_puestos = [(p.nombre, p.nombre) for p in puestos_disponibles]

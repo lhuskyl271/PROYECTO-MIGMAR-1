@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Detalle Cotización #{{ cotizacion.id }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+
+    {% if error_params %}
+    <div class="alert alert-danger shadow">
+        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Error de Configuración</h4>
+        <p>No se pueden calcular los costos porque faltan los Parámetros Globales (Diesel, Llantas).</p>
+        <a href="{% url 'parametros_nuevo' %}" class="btn btn-danger">Configurar Ahora</a>
+    </div>
+    {% else %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="text-muted mb-0">Cotización #{{ cotizacion.id }}</h5>
+            <h2 class="fw-bold text-primary">{{ cotizacion.cliente.nombre }}</h2>
+            <span class="badge bg-light text-dark border">
+                <i class="fas fa-route me-1"></i> {{ cotizacion.origen }} <i class="fas fa-arrow-right mx-1"></i> {{ cotizacion.destino }}
+            </span>
+            {% if cotizacion.es_viaje_redondo %}
+            <span class="badge bg-info text-dark"><i class="fas fa-sync-alt me-1"></i> Redondo</span>
+            {% endif %}
+        </div>
+        <div class="text-end">
+            <a href="javascript:window.print()" class="btn btn-outline-dark"><i class="fas fa-print me-2"></i>Imprimir</a>
+            <a href="{% url 'cotizaciones_lista' %}" class="btn btn-secondary">Volver</a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-success h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase">Precio Sugerido (Con IVA)</h6>
+                    <h1 class="display-5 fw-bold text-success">${{ finanzas.gran_total|floatformat:2|intcomma }}</h1>
+                    <small class="text-muted">Subtotal: ${{ finanzas.subtotal_venta|floatformat:2|intcomma }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 {% if es_rentable %}border-primary{% else %}border-danger{% endif %}">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase">Utilidad Neta Proyectada</h6>
+                    <h2 class="fw-bold {% if es_rentable %}text-primary{% else %}text-danger{% endif %}">
+                        ${{ finanzas.utilidad_monetaria|floatformat:2|intcomma }}
+                    </h2>
+                    <span class="badge {% if es_rentable %}bg-success{% else %}bg-danger{% endif %}">
+                        Margen: {{ cotizacion.margen_utilidad_deseado }}%
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-secondary h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-muted text-uppercase">Costo Real por KM</h6>
+                    <h3 class="fw-bold text-dark">${{ finanzas.costo_por_km|floatformat:2 }}</h3>
+                    <small class="text-muted">Debes cobrar mínimo: ${{ finanzas.precio_por_km|floatformat:2 }} /km</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-microchip me-2"></i>Análisis de Eficiencia</h5>
+                </div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-tachometer-alt text-secondary me-2"></i>Distancia Total</span>
+                        <strong>{{ finanzas.distancia_total|intcomma }} km</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-gas-pump text-secondary me-2"></i>Consumo Diésel Estimado</span>
+                        <strong>{{ finanzas.litros_totales|floatformat:1 }} Litros</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                        <span><i class="fas fa-chart-line text-info me-2"></i>Rendimiento Real (Ajustado)</span>
+                        <span class="fw-bold text-info">{{ finanzas.rendimiento_promedio_viaje|floatformat:2 }} km/l</span>
+                    </li>
+                    <li class="list-group-item small text-muted">
+                        * Este rendimiento considera que llevas <strong>{{ cotizacion.peso_carga_toneladas }} tons</strong> 
+                        en un terreno con factor <strong>{{ cotizacion.factor_terreno }}x</strong>.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-search-dollar me-2"></i>Estructura de Costos</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            <tr>
+                                <td>Combustible</td>
+                                <td class="text-end">${{ finanzas.costo_diesel|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Sueldo Operador + Viáticos</td>
+                                <td class="text-end">${{ cotizacion.sueldo_operador|add:cotizacion.viaticos|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Peajes y Maniobras</td>
+                                <td class="text-end">${{ cotizacion.costo_casetas|add:cotizacion.costo_maniobras|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Desgaste (Llantas/Mtto) <i class="fas fa-info-circle text-muted" title="Incluye factor terreno"></i></td>
+                                <td class="text-end">${{ finanzas.costo_desgaste|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <td>Costos Fijos (Seguro/GPS)</td>
+                                <td class="text-end">${{ finanzas.costo_fijos|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr class="table-warning">
+                                <td><strong>Costo por Demoras/Esperas</strong></td>
+                                <td class="text-end fw-bold text-dark">${{ finanzas.costo_demoras|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr class="table-dark fw-bold">
+                                <td>TOTAL COSTO OPERATIVO</td>
+                                <td class="text-end">${{ finanzas.costo_operativo_total|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow border-primary h-100">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4 class="mb-0">Cotización al Cliente</h4>
+                </div>
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <div class="text-center mb-4">
+                        <h5 class="text-muted">Importe del Flete</h5>
+                        <h2 class="fw-bold text-dark">${{ finanzas.subtotal_venta|floatformat:2|intcomma }}</h2>
+                        <p class="text-muted">+ IVA (16%): ${{ finanzas.iva|floatformat:2|intcomma }}</p>
+                        <p class="text-muted">- Retención (4%): ${{ finanzas.retencion|floatformat:2|intcomma }}</p>
+                    </div>
+                    
+                    <div class="alert alert-success text-center p-4 rounded-3">
+                        <h5 class="mb-2">Total a Facturar</h5>
+                        <h1 class="display-4 fw-bold">${{ finanzas.gran_total|floatformat:2|intcomma }}</h1>
+                    </div>
+
+                    <div class="mt-auto text-center">
+                        <p class="small text-muted">Vigencia: 15 días. Sujeto a disponibilidad de equipo.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}

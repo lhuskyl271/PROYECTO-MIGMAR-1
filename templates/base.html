@@ -305,11 +305,16 @@
                                             <li><h6 class="dropdown-header">Unidades</h6></li>
                                             <li><a class="dropdown-item" href="{% url 'unidad-list' %}"><i class="fas fa-truck-moving me-2"></i>Ver Unidades</a></li>
                                             <li><a class="dropdown-item" href="{% url 'operador-list' %}"><i class="fas fa-id-card me-2"></i>Operadores</a></li>
+                                            
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">Neumáticos</h6></li>
+                                            <li><a class="dropdown-item" href="{% url 'llantas-list' %}"><i class="fas fa-clipboard-check me-2"></i>Inspecciones Llantas</a></li>
+                                            
                                             <li><hr class="dropdown-divider"></li>
                                             <li><h6 class="dropdown-header">Mantenimiento</h6></li>
                                             <li><a class="dropdown-item" href="{% url 'asignar-revision' %}"><i class="fas fa-tasks me-2"></i>Asignar Revisión</a></li>
                                             <li><a class="dropdown-item" href="{% url 'monitor-revisiones' %}"><i class="fas fa-desktop me-2"></i>Monitor Diario</a></li>
-                                            <li><a class="dropdown-item" href="{% url 'checklist-list' %}"><i class="fas fa-clipboard-check me-2"></i>Checklists</a></li>
+                                            <li><a class="dropdown-item" href="{% url 'checklist-list' %}"><i class="fas fa-clipboard-list me-2"></i>Checklists Unidades</a></li>
                                         </ul>
                                     </li>
 
@@ -340,6 +345,9 @@
                                             <li><hr class="dropdown-divider"></li>
                                             <li><h6 class="dropdown-header">Catálogos</h6></li>
                                             <li><a class="dropdown-item" href="{% url 'almacen:articulo-crear' %}"><i class="fas fa-barcode me-2"></i>Crear Artículo</a></li>
+                                            
+                                            <li><a class="dropdown-item" href="{% url 'almacen:gestion-categorias' %}"><i class="fas fa-tags me-2"></i>Categorías</a></li>
+                                            
                                             <li><a class="dropdown-item" href="{% url 'almacen:proveedor-list' %}"><i class="fas fa-people-carry me-2"></i>Proveedores</a></li>
                                         </ul>
                                     </li>
@@ -356,6 +364,37 @@
                                         </ul>
                                     </li>
                                     
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle {% if 'cotizaciones/' in request.path %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-file-invoice-dollar"></i> Comercial
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Operación</h6></li>
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'cotizaciones_lista' %}">
+                                                    <i class="fas fa-list-ul me-2"></i>Historial Cotizaciones
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'cotizacion_nueva' %}">
+                                                    <i class="fas fa-calculator me-2"></i>Nueva Cotización
+                                                </a>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">Configuración</h6></li>
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'unidades_lista' %}">
+                                                    <i class="fas fa-truck me-2"></i>Catálogo Unidades
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'parametros_lista' %}">
+                                                    <i class="fas fa-gas-pump me-2"></i>Costos Base (Diésel)
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </li>
+
                                     <li class="nav-item">
                                         <a class="nav-link" href="{% url 'admin-panel-de-control' %}">
                                             <i class="fas fa-cogs"></i> Panel
