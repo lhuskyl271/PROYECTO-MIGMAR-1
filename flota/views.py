@@ -996,12 +996,10 @@ class LlantasInspeccionListView(AdminRequiredMixin, ListView):
     template_name = 'generic_list.html'
     paginate_by = 25
 
-    # --- MÉTODO MODIFICADO ---
     def get_queryset(self):
         queryset = LlantasInspeccion.objects.select_related('unidad', 'tecnico').order_by('-fecha')
         queryset = queryset.filter(es_dummy=False)
         
-        # Lógica de filtrado añadida
         unidad_id = self.request.GET.get('unidad')
         start_date_str = self.request.GET.get('start_date')
         end_date_str = self.request.GET.get('end_date')
@@ -1013,28 +1011,26 @@ class LlantasInspeccionListView(AdminRequiredMixin, ListView):
             
         return queryset
 
-    # --- MÉTODO MODIFICADO ---
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update({
             'titulo': 'Inspecciones de Llantas', 
             'url_crear': 'llantas-create', 
-            'headers': ['#', 'Unidad', 'Kilometraje', 'Técnico', 'Fecha'], 
+            # QUITE 'Kilometraje' DE LOS ENCABEZADOS
+            'headers': ['#', 'Unidad', 'Técnico', 'Fecha'], 
             'url_detail_name': 'llantas-detail', 
             'url_update_name': 'llantas-update', 
             'url_delete_name': 'llantas-delete'
         })
-        # Pasamos los valores de los filtros a la plantilla
         context['start_date'] = self.request.GET.get('start_date', '')
         context['end_date'] = self.request.GET.get('end_date', '')
         if selected_unidad_id := self.request.GET.get('unidad'):
             context['selected_unidad'] = Unidad.objects.filter(pk=selected_unidad_id).first()
         
-        # ========= INICIO DEL CÓDIGO A AGREGAR =========
         context['show_general_export_button'] = True
         context['export_url_name'] = 'llantas-export-excel'
-        # ========= FIN DEL CÓDIGO A AGREGAR =========
         return context
+
 
 class LlantasInspeccionDetailView(AdminRequiredMixin, DetailView):
     model = LlantasInspeccion
@@ -1076,7 +1072,6 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
         inspeccion = self.get_object()
         
         context['titulo'] = f"Editar Inspección de Llantas: {inspeccion.unidad.nombre}"
@@ -1084,13 +1079,9 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
         context['fecha_actual'] = inspeccion.fecha
         context['form_mode'] = 'update' 
 
-        # Esta parte pasa el 'user' al formulario cuando la página CARGA
-        context['km_form'] = LlantasKmForm(
-            initial={'km': inspeccion.km},
-            unidad=inspeccion.unidad,
-            user=self.request.user
-        )
+        # ELIMINADO: Ya no pasamos km_form al contexto
         
+        # Formset de detalles (sin cambios)
         FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0, max_num=6, can_delete=True)
         
         if self.request.POST:
@@ -1102,47 +1093,35 @@ class LlantasInspeccionUpdateView(AdminRequiredMixin, UpdateView):
 
     def post(self, request, *args, **kwargs):
         """Maneja el envío del formulario principal y el formset de detalles."""
-        
-        # === ¡NUEVO DEBUG PARA EL POST! ===
-        print("\n" + "="*40)
-        print("DEBUG POST: ¡ESTOY EN EL MÉTODO POST NUEVO!")
-        print(f"DEBUG POST: Usuario en VISTA es: {request.user}")
-        print("="*40 + "\n")
-        # ===================================
-        
         self.object = self.get_object()
-        
         form = self.get_form()
         
-        # Esta es la línea clave: Pasa el 'user' al formulario cuando GUARDA
-        km_form = LlantasKmForm(request.POST, unidad=self.object.unidad, user=self.request.user)
+        # ELIMINADO: Ya no instanciamos LlantasKmForm
         
         FormSet = inlineformset_factory(LlantasInspeccion, LlantaDetalle, form=LlantaDetalleForm, extra=0, max_num=6, can_delete=True)
         formset = FormSet(request.POST, instance=self.object, prefix='llantas')
 
-        if form.is_valid() and km_form.is_valid() and formset.is_valid():
-            return self.form_valid(form, km_form, formset)
+        # Solo validamos form y formset (sin km_form)
+        if form.is_valid() and formset.is_valid():
+            return self.form_valid(form, formset)
         else:
-            return self.form_invalid(form, km_form, formset)
+            return self.form_invalid(form, formset)
 
-    def form_valid(self, form, km_form, formset):
+    def form_valid(self, form, formset):
         """Si todo es válido, guarda los cambios."""
         with transaction.atomic():
             inspeccion = form.save(commit=False)
-            inspeccion.km = km_form.cleaned_data['km']
+            # ELIMINADO: inspeccion.km = ... (ya no existe el campo)
             inspeccion.save()
-            
             formset.save()
 
         messages.success(self.request, "Inspección de llantas actualizada correctamente.")
         return redirect(self.success_url)
 
-    def form_invalid(self, form, km_form, formset):
-        """Si hay errores, vuelve a mostrar el formulario con los datos y errores."""
+    def form_invalid(self, form, formset): # Firma del método actualizada
         messages.error(self.request, "Por favor, corrija los errores marcados.")
         context = self.get_context_data()
         context['form'] = form
-        context['km_form'] = km_form
         context['formset'] = formset
         return self.render_to_response(context)
 
