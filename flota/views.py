@@ -1566,7 +1566,22 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
     template_name = 'generic_form.html'
 
     def get_proceso(self):
-        return get_object_or_404(ProcesoCarga, pk=self.kwargs['proceso_pk'], status='PENDIENTE')
+        # --- CORRECCIÓN: Quitamos status='PENDIENTE' del filtro ---
+        # Buscamos solo por ID. Si ya se completó, lo validaremos después.
+        return get_object_or_404(ProcesoCarga, pk=self.kwargs['proceso_pk'])
+
+    def dispatch(self, request, *args, **kwargs):
+        # --- VALIDACIÓN DE SEGURIDAD ---
+        # Antes de procesar nada, revisamos si ya se completó.
+        try:
+            proceso = self.get_proceso()
+            if proceso.status == 'COMPLETADO':
+                messages.warning(request, f"El proceso para {proceso.unidad.nombre} ya fue completado anteriormente.")
+                return redirect('encargado-pendientes-list')
+        except Exception:
+            pass # Si falla (ej. 404), dejamos que el flujo normal lo maneje
+            
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1576,11 +1591,15 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
         return context
     
     def post(self, request, *args, **kwargs):
+        # Verificación extra para evitar procesar doble
+        proceso = self.get_proceso()
+        if proceso.status == 'COMPLETADO':
+             return redirect('encargado-pendientes-list')
+             
         form = self.get_form()
         if form.is_valid():
             return self.form_valid(form)
         else:
-            # Debugging y mensajes de error
             error_message = "El formulario contiene errores: "
             for field, errors in form.errors.items():
                 error_message += f"{field}: {'; '.join(errors)}. "
@@ -1593,6 +1612,10 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
         diesel_data = self.request.session.get(diesel_data_key)
 
         if not diesel_data:
+            # Si ya se completó y se limpió la sesión, redirigir suavemente
+            if proceso.status == 'COMPLETADO':
+                 return redirect('encargado-pendientes-list')
+            
             messages.error(self.request, "Error de sesión: Datos de diésel perdidos. Reinicie desde el paso anterior.")
             return redirect('encargado-proceso-diesel', proceso_pk=proceso.pk)
 
@@ -1605,23 +1628,28 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
             se_agrego_urea = False
 
             with transaction.atomic():
+                # Verificamos por última vez dentro de la transacción para evitar condiciones de carrera
+                proceso.refresh_from_db()
+                if proceso.status == 'COMPLETADO':
+                     return redirect('encargado-pendientes-list')
+
                 operador_id = diesel_data.pop('operador_id', None)
                 operador = get_object_or_404(Operador, pk=operador_id)
                 
-                # 1. Crear la Carga de Diésel (Ahora contiene el KM, fotos Odómetro y Sticker)
+                # 1. Crear la Carga de Diésel
                 carga_diesel_obj = CargaDiesel.objects.create(
                     unidad=proceso.unidad, 
                     operador=operador, 
                     **diesel_data
                 )
                 
-                # 2. ACTUALIZAR EL KILOMETRAJE DE LA UNIDAD (Fuente: CargaDiesel)
+                # 2. ACTUALIZAR EL KILOMETRAJE
                 km_registrado = carga_diesel_obj.km_actual
                 if km_registrado > proceso.unidad.km_actual:
                     proceso.unidad.km_actual = km_registrado
                     proceso.unidad.save()
                 
-                # 3. Procesar Carga de Urea (si hubo)
+                # 3. Procesar Carga de Urea
                 carga_urea_obj = None
                 litros_urea = form.cleaned_data.get('litros_cargados')
                 
@@ -1634,11 +1662,9 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
                         fecha_str = timezone.now().strftime('%Y-%m-%d')
                         _nombre, ext = os.path.splitext(foto_urea_file.name)
                         s3_path = f"flota/cargas_urea/{proceso.unidad.nombre}/{fecha_str}/urea{ext}"
-                        ruta = _subir_archivo_a_s3(foto_urea_file, s3_path) #
+                        ruta = _subir_archivo_a_s3(foto_urea_file, s3_path)
                         if ruta:
                             urea_obj.foto_urea = ruta
-                        else:
-                             raise Exception("Fallo al subir foto urea")
                     
                     urea_obj.save()
                     carga_urea_obj = urea_obj
@@ -1652,7 +1678,7 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
                 proceso.status = 'COMPLETADO'
                 proceso.save()
                 
-                # 5. Actualizar AsignacionRevision a TERMINADO
+                # 5. Actualizar AsignacionRevision
                 try:
                     asignacion_del_dia = AsignacionRevision.objects.get(
                         unidad=proceso.unidad,
@@ -1666,12 +1692,10 @@ class EncargadoProcesoUreaView(EncargadoRequiredMixin, FormView):
 
             # Fin Transacción
             
-            # Recálculos de costos
             recalcular_costos_cargas_diesel() 
             if se_agrego_urea:
                 recalcular_costos_cargas_urea()
 
-            # Limpiar sesión
             if diesel_data_key in self.request.session:
                 del self.request.session[diesel_data_key]
             
