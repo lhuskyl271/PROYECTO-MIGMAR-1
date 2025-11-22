@@ -41,7 +41,7 @@
                         <div class="row g-3 g-md-4">
                             {% for field in form.visible_fields %}
                             
-                            {# --- LÓGICA DE SECCIONAMIENTO VISUAL (Tus estilos originales) --- #}
+                            {# --- LÓGICA DE SECCIONAMIENTO VISUAL --- #}
                             {% if field.name == 'nombre' %}
                                 <div class="col-12">
                                     <div class="section-header mb-3">
@@ -85,18 +85,16 @@
                                     {% if field.field.disabled %}
                                         {% render_field field class="form-control-plaintext bg-light px-3 py-2 rounded" readonly=True placeholder=field.label %}
                                     {% else %}
-                                        {# Aquí preservamos los IDs (input_foto_odometro, etc) definidos en forms.py #}
-                                        {% with field_class=field.field.widget.attrs.class|default:"form-control" %}
-                                            {% render_field field class=field_class placeholder=field.label %}
-                                        {% endwith %}
+                                        {# Usamos widget_tweaks para renderizar con clases, pero respetando los atributos de forms.py #}
+                                        {% render_field field class+="form-control" placeholder=field.label %}
                                     {% endif %}
                                     <label for="{{ field.id_for_label }}" class="fw-semibold">{{ field.label }}</label>
                                 </div>
                                 
-                                {# Spinner de carga específico para el campo KM (oculto por defecto) #}
+                                {# Spinner de carga específico para el campo KM #}
                                 {% if field.name == 'km_actual' %}
-                                    <div id="ocr-loading-spinner" class="d-none mt-2 text-primary">
-                                        <small><i class="fas fa-spinner fa-spin me-1"></i> Procesando imagen con IA...</small>
+                                    <div id="ocr-loading-spinner" class="d-none mt-2 text-primary fw-bold">
+                                        <small><i class="fas fa-spinner fa-spin me-1"></i> Analizando imagen con IA...</small>
                                     </div>
                                 {% endif %}
 
@@ -141,7 +139,7 @@
 
 {% block extra_js %}
 <style>
-    /* --- Estilos Generales (Tus estilos originales) --- */
+    /* --- Estilos Generales --- */
     .card { box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08) !important; border: 1px solid rgba(0, 0, 0, 0.05); }
     .card-header { border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
     .section-header { position: relative; }
@@ -154,19 +152,19 @@
     .form-control:focus, .form-select:focus { border-color: #86b7fe; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15); }
     .form-label { font-weight: 600; color: #495057; }
     
-    /* Transiciones */
-    [data-field-wrapper-for], [data-section-wrapper] { transition: all 0.4s ease-in-out; overflow: hidden; }
-    .field-hidden { max-height: 0 !important; opacity: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important; transform: scale(0.95); }
-    
     /* Botones */
     .btn { border-radius: 8px; font-weight: 600; padding: 0.75rem 1.5rem; transition: all 0.2s ease-in-out; }
     .btn-lg { padding: 0.875rem 1.75rem; }
     .btn-success { background: linear-gradient(135deg, #198754, #157347); border: none; }
     .btn-success:hover { background: linear-gradient(135deg, #157347, #13653f); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(25, 135, 84, 0.3); }
     
+    /* Clases ocultas para lógica de unidad */
+    .field-hidden { display: none !important; }
+
     /* Feedback visual OCR */
-    .ocr-success { border-color: #198754 !important; background-color: #f8fff9 !important; }
-    .ocr-loading { background-color: #fff3cd !important; }
+    .ocr-success { border-color: #198754 !important; background-color: #d1e7dd !important; color: #0f5132 !important; }
+    .ocr-error { border-color: #dc3545 !important; background-color: #f8d7da !important; }
+    .ocr-loading-input { background-color: #fff3cd !important; }
 
     /* Responsive */
     @media (max-width: 768px) {
@@ -217,14 +215,15 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // =======================================================
-    // 2. LÓGICA DE OCR (Reconocimiento de Texto)
+    // 2. LÓGICA DE OCR (Campo Bloqueado)
     // =======================================================
     const initOCRLogic = () => {
+        // NOTA: Estos IDs deben coincidir con los definidos en forms.py
         const inputFoto = document.getElementById('input_foto_odometro');
-        const inputKm = document.getElementById('input_km_actual');
+        const inputKm = document.getElementById('input_km_actual'); 
         const spinner = document.getElementById('ocr-loading-spinner');
 
-        // Si no existen los inputs (ej: estamos en el form de Unidad, no en CargaDiesel), salir.
+        // Si no existen en el formulario actual, salir.
         if (!inputFoto || !inputKm) return;
 
         inputFoto.addEventListener('change', function(event) {
@@ -233,16 +232,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // 1. UI: Mostrar estado de carga
             inputKm.value = ''; // Limpiar valor anterior
-            inputKm.placeholder = "Detectando...";
-            inputKm.classList.add('ocr-loading');
+            inputKm.placeholder = "🤖 Analizando imagen con IA...";
+            inputKm.classList.remove('ocr-success', 'ocr-error');
+            inputKm.classList.add('ocr-loading-input');
+            
             if(spinner) spinner.classList.remove('d-none');
 
             // 2. Preparar datos
             const formData = new FormData();
-            formData.append('imagen', file); // 'imagen' debe coincidir con lo que espera tu API View
+            formData.append('imagen', file); // 'imagen' coincide con la vista de API
 
-            // 3. Llamada AJAX a tu API
-            // NOTA: Asegúrate de tener configurada esta URL en urls.py
+            // 3. Llamada AJAX
             fetch('/api/ocr-lectura/', { 
                 method: 'POST',
                 body: formData,
@@ -253,34 +253,39 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 // Limpiar estado de carga
-                inputKm.classList.remove('ocr-loading');
+                inputKm.classList.remove('ocr-loading-input');
                 if(spinner) spinner.classList.add('d-none');
 
                 if (data.status === 'ok' && data.numero) {
-                    // CASO ÉXITO
+                    // CASO ÉXITO: Escribimos en el campo readonly
                     inputKm.value = data.numero;
                     inputKm.classList.add('ocr-success');
+                    // Animación simple
+                    inputKm.animate([
+                        { transform: 'scale(1)' },
+                        { transform: 'scale(1.02)' },
+                        { transform: 'scale(1)' }
+                    ], { duration: 300 });
                     
-                    // Pequeño efecto visual para confirmar
-                    setTimeout(() => inputKm.classList.remove('ocr-success'), 3000);
                 } else {
-                    // CASO FALLO / NO DETECTADO
+                    // CASO FALLO
                     console.warn("OCR Warning:", data.message);
-                    inputKm.placeholder = "Ingrese manual";
-                    // Opcional: alert("No se detectó el número. Ingréselo manualmente.");
+                    inputKm.value = ""; 
+                    inputKm.placeholder = "❌ No se detectó texto. Intente otra foto más clara.";
+                    inputKm.classList.add('ocr-error');
                 }
             })
             .catch(error => {
                 console.error('Error OCR:', error);
-                inputKm.classList.remove('ocr-loading');
+                inputKm.classList.remove('ocr-loading-input');
                 if(spinner) spinner.classList.add('d-none');
-                inputKm.placeholder = "Error de red";
-                alert("Error al conectar con el servicio de lectura. Ingrese el KM manualmente.");
+                inputKm.placeholder = "Error de conexión con el servidor.";
+                inputKm.classList.add('ocr-error');
             });
         });
     };
 
-    // Inicializar ambos módulos
+    // Inicializar
     initUnidadForm();
     initOCRLogic();
 });
