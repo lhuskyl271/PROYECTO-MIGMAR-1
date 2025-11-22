@@ -105,85 +105,55 @@ class OperadorForm(forms.ModelForm):
 
 
 class CargaDieselForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        # --- CORRECCIÓN: Extraer argumentos personalizados ANTES de super().__init__ ---
-        self.unidad_instance = kwargs.pop('unidad', None)
-        self.user = kwargs.pop('user', None)
-        # -----------------------------------------------------------------------------
-
-        super().__init__(*args, **kwargs)
-        
-        # Configuración para la FOTO DEL ODÓMETRO (Trigger del OCR)
-        if 'foto_odometro' in self.fields:
-            self.fields['foto_odometro'].widget.attrs.update({
-                'class': 'form-control',
-                'accept': 'image/*',
-                'capture': 'environment',
-                'id': 'input_foto_odometro' # ID CLAVE PARA EL JAVASCRIPT
-            })
-            self.fields['foto_odometro'].label = "📸 Foto Odómetro (Detectar KM)"
-            self.fields['foto_odometro'].required = True # Ahora es obligatorio aquí
-
-        if 'km_actual' in self.fields:
-            self.fields['km_actual'].widget.attrs.update({
-                'class': 'form-control',
-                'id': 'input_km_actual', # ID PARA QUE EL JS LO LLENE
-                'readonly': False # Permitir corrección manual si el OCR falla
-            })
-
-        # Configuración para el resto de fotos
-        for campo_foto in ['foto_motor', 'foto_thermo', 'foto_sticker']:
-            if campo_foto in self.fields:
-                self.fields[campo_foto].widget.attrs.update({
-                    'class': 'form-control',
-                    'accept': 'image/*',
-                    'capture': 'environment'
-                })
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        # La unidad puede venir de la instancia (edición) o del argumento (creación)
-        unidad = self.unidad_instance or cleaned_data.get('unidad')
-        if not unidad: return cleaned_data
-        
-        ultima_carga = CargaDiesel.objects.filter(unidad=unidad).order_by('-fecha').first()
-        if ultima_carga:
-            km_actual_form = cleaned_data.get('km_actual')
-            
-            # Validar solo si NO es administrador
-            # Si self.user es None (caso Encargado que no pasa user), is_admin será False, lo cual es correcto.
-            is_admin = self.user and (self.user.is_staff or self.user.groups.filter(name='Administrador').exists())
-
-            if not is_admin:
-                if km_actual_form is not None and km_actual_form <= ultima_carga.km_actual:
-                    self.add_error('km_actual', f"El kilometraje debe ser mayor al último registrado ({ultima_carga.km_actual} km).")
-            
-            hrs_thermo_form = cleaned_data.get('hrs_thermo')
-            if hrs_thermo_form is not None and hrs_thermo_form <= (ultima_carga.hrs_thermo or 0):
-                self.add_error('hrs_thermo', f"Las horas del thermo deben ser mayores a las últimas registradas ({ultima_carga.hrs_thermo} hrs).")
-        return cleaned_data
-
-    def clean_cinchos_actuales(self):
-        cinchos_actuales = self.cleaned_data.get('cinchos_actuales')
-        if cinchos_actuales:
-            # Excluir la propia instancia si estamos editando
-            qs = CargaDiesel.objects.filter(cinchos_actuales=cinchos_actuales)
-            if self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            
-            if qs.exists():
-                raise ValidationError("Este número de cincho ya ha sido registrado. No se puede repetir.")
-        return cinchos_actuales
-
     class Meta:
         model = CargaDiesel
-        fields = '__all__'
-        exclude = ['fecha', 'rendimiento', 'costo']
+        fields = [
+            'unidad', 'operador', 
+            'lts_diesel', 'costo', 
+            'lts_thermo', 'hrs_thermo', 
+            'km_actual', 
+            'cinchos_anteriores', 'cinchos_actuales', 'persona_relleno',
+            'foto_odometro', 'foto_sticker', 'foto_motor', 'foto_thermo'
+        ]
         widgets = {
-            'unidad': forms.Select(attrs={'class': 'form-control'}),
-            'operador': forms.Select(attrs={'class': 'form-control'}),
+            'unidad': forms.Select(attrs={'class': 'form-select'}),
+            'operador': forms.Select(attrs={'class': 'form-select'}),
+            
+            'lts_diesel': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            # AHORA FUNCIONARÁ: El campo es editable en modelo, pero readonly aquí
+            'costo': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'readonly': True}),
+            'lts_thermo': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'hrs_thermo': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            
+            'km_actual': forms.NumberInput(attrs={
+                'readonly': 'readonly', 
+                'id': 'input_km_actual',
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': 'Suba foto del odómetro para detectar...',
+                'style': 'background-color: #e9ecef; cursor: not-allowed; font-weight: bold; color: #495057;'
+            }),
+            'foto_odometro': forms.ClearableFileInput(attrs={'class': 'form-control', 'id': 'input_foto_odometro'}),
+            'foto_sticker': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'foto_motor': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'foto_thermo': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'cinchos_anteriores': forms.TextInput(attrs={'class': 'form-control'}),
+            'cinchos_actuales': forms.TextInput(attrs={'class': 'form-control'}),
+            'persona_relleno': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        unidad = kwargs.pop('unidad', None)
+        super().__init__(*args, **kwargs)
+        
+        if unidad:
+            self.fields['unidad'].initial = unidad
+            self.fields['unidad'].widget.attrs['readonly'] = True
+            self.fields['unidad'].widget.attrs['style'] = 'pointer-events: none; background-color: #e9ecef;'
+        
+        if self.user and not self.initial.get('persona_relleno'):
+            self.fields['persona_relleno'].initial = self.user.get_full_name() or self.user.username
         
 class CargaAceiteForm(forms.ModelForm):
     def clean(self):
