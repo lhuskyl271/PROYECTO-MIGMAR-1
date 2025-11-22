@@ -47,7 +47,12 @@ class Unidad(models.Model):
     vin = models.CharField(max_length=17, blank=True, null=True, verbose_name="VIN")
     poliza = models.CharField(max_length=100, blank=True, null=True)
     tag = models.CharField(max_length=50, blank=True, null=True, verbose_name="TAG IAVE")
-    km_actual = models.PositiveIntegerField(default=0, verbose_name="Kilometraje Actual")
+    km_actual = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Kilometraje Actual"
+    )   
     tamano_caja_pies = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="Tamaño de Caja (Pies)"
     )
@@ -112,10 +117,14 @@ class CargaDiesel(models.Model):
     unidad = models.ForeignKey(Unidad, on_delete=models.CASCADE)
     operador = models.ForeignKey(Operador, on_delete=models.SET_NULL, null=True, blank=True)
     lts_diesel = models.DecimalField(max_digits=8, decimal_places=2, verbose_name="Litros Diésel")
-    costo = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Total", null=True, blank=True, editable=False)
+    costo = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Costo Total", null=True, blank=True)
     lts_thermo = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, verbose_name="Litros Thermo")
     hrs_thermo = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, verbose_name="Horas Thermo")
-    km_actual = models.PositiveIntegerField(verbose_name="Kilometraje al Cargar")
+    km_actual = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        verbose_name="Kilometraje al Cargar"
+    )
     cinchos_anteriores = models.CharField(max_length=100, blank=True)
     cinchos_actuales = models.CharField(max_length=100, blank=True)
     persona_relleno = models.CharField(max_length=150)
@@ -197,7 +206,7 @@ class CompraSuministro(models.Model):
     
     # --- CAMPOS MODIFICADOS / AÑADIDOS ---
     precio_por_litro = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio por Litro/Unidad", null=True, blank=True)
-    precio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Total", editable=False)
+    precio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio Total", null=True, blank=True)
     litros_restantes = models.DecimalField(max_digits=10, decimal_places=2, editable=False, help_text="Litros disponibles de esta compra")
     # --- FIN DE CAMPOS ---
 
